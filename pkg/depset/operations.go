@@ -1,0 +1,142 @@
+package depset
+
+import (
+	"crypto/sha1"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"sort"
+)
+
+// ErrNotSupported returned when an operation is not supported (e.g. in the UpdateAction.Operation)
+var ErrNotSupported = errors.New("not supported")
+
+// ErrNotFound returned when a field required for Delta to be applied was missing.
+var ErrNotFound = errors.New("not found")
+
+func copyModuleSpec(ms ModuleSpec) ModuleSpec {
+	// for now we assume that all values are actially value type and not secretly maps or slices...
+	// Maybe we should use something like: https://gist.github.com/soroushjp/0ec92102641ddfc3ad5515ca76405f4d
+	out := make(ModuleSpec)
+	for k := range ms {
+		out[k] = ms[k]
+	}
+	return out
+}
+
+// Apply generates a new Deployment Set from an existsing set by applying a Deployment Delat
+// Both the Set and Delte objects can be big so use pointers. (Question: is this deomatic go?)
+func (inputSet Set) Apply(delta Delta) (Set, error) {
+	// Note: The Set structure makes a lot of use of map
+	// In Go, maps are always passed by referece, so they should not be mutated
+	// For this function, we need to make sure we *never* update any map inside inputSet
+
+	// TODO: Check for conflicts.
+
+	set := Set{Modules: make(map[string]ModuleSpec)}
+
+	removeModules := make(map[string]bool)
+	for _, name := range delta.Modules.Remove {
+		// Question: Should we check if a module to be removes actually exists?
+		// Probably not, as the "desired state" would be no module.
+		removeModules[name] = true
+	}
+
+	// Remove modules
+	// The code actually adds everything that is not marked as remove
+	for name := range inputSet.Modules {
+		if !removeModules[name] {
+			set.Modules[name] = copyModuleSpec(inputSet.Modules[name])
+		}
+	}
+
+	// Add modules
+	for name, values := range delta.Modules.Add {
+		// Question: Should we check if module exists in set *before* adding it. Otherwise an add becomes a replace.
+		// Probably not, as the "desired state" would be this module
+
+		set.Modules[name] = copyModuleSpec(values)
+	}
+
+	// Update Modules
+	for name, values := range delta.Modules.Update {
+		if _, ok := set.Modules[name]; !ok {
+			return Set{}, ErrNotFound
+		}
+		// Note, that we already made a copy of the map in the "remove" section
+		for _, action := range values {
+
+			switch action.Operation {
+			case "add":
+				set.Modules[name][action.Path] = action.Value
+			case "remove":
+				delete(set.Modules[name], action.Path)
+			case "replace":
+				// Question: Do we need replace? Maybe this is just the same as an add in practice?
+				set.Modules[name][action.Path] = action.Value
+			default:
+				return Set{}, ErrNotSupported
+			}
+		}
+	}
+
+	return set, nil
+}
+
+func getMapKeysAsSortedSlice(m map[string]interface{}) []string {
+	a := make([]string, len(m))
+	i := 0
+	for k := range m {
+		a[i] = k
+		i++
+	}
+	sort.StringSlice(a).Sort()
+	return a
+}
+
+func getModuleSpecKeysAsSortedSlice(m map[string]ModuleSpec) []string {
+	a := make([]string, len(m))
+	i := 0
+	for k := range m {
+		a[i] = k
+		i++
+	}
+	sort.StringSlice(a).Sort()
+	return a
+}
+
+func getModuleSpecAsSortedSlice(m ModuleSpec) [][2]interface{} {
+	sortedKeys := getMapKeysAsSortedSlice(m)
+
+	kvpArr := make([][2]interface{}, len(m))
+	for i := range sortedKeys {
+		kvpArr[i] = [2]interface{}{sortedKeys[i], m[sortedKeys[i]]}
+	}
+	return kvpArr
+}
+
+func getModulesAsSortedSlice(m map[string]ModuleSpec) [][2]interface{} {
+	sortedModules := getModuleSpecKeysAsSortedSlice(m)
+
+	kvpArr := make([][2]interface{}, len(m))
+	for i := range sortedModules {
+		kvpArr[i] = [2]interface{}{sortedModules[i], getModuleSpecAsSortedSlice(m[sortedModules[i]])}
+	}
+	return kvpArr
+}
+
+// Hash generates an invarient id for a Deployment Set
+func (inputSet Set) Hash() string {
+	// For now, we hack it by converting the deployment set into an array structure
+
+	// sepecial case for the empty set, the hash is zero
+	if len(inputSet.Modules) == 0 {
+		return "0000000000000000000000000000000000000000"
+	}
+
+	arrSet := [2]interface{}{"modules", getModulesAsSortedSlice(inputSet.Modules)}
+
+	buf, _ := json.Marshal(arrSet)
+	checksum := sha1.Sum(buf)
+	return hex.EncodeToString(checksum[:])
+}
