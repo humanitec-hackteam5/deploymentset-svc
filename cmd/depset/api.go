@@ -91,7 +91,6 @@ func (s *server) applyDelta() httprouter.Handle {
 		}
 
 		var set depset.Set
-		log.Printf("`%s`", params.ByName("setId"))
 		if !isZeroHash(params.ByName("setId")) {
 			set, err = s.selectRawSet(params.ByName("orgId"), params.ByName("appId"), params.ByName("setId"))
 			if err == ErrNotFound {
