@@ -1,25 +1,25 @@
 version: "3"
 
 services:
-#  module-svc:
-#    build: .
-#
-#    expose:
-#      - "8080"
-#
-#    ports:
-#      - "8080:8080"
-#
-#    depends_on:
-#      - moduledb
-#
-#    environment:
-#      DATABASE_HOST: depsetdb
-#      DATABASE_NAME: depsets
-#      DATABASE_USER: depset_robot
-#      DATABASE_PASSWORD: "d3p53t5"
-#
-  moduledb:
+  depset:
+    build: .
+
+    expose:
+      - "8080"
+
+    ports:
+      - "8080:8080"
+
+    depends_on:
+      - depsetdb
+
+    environment:
+      DATABASE_HOST: depsetdb
+      DATABASE_NAME: depsets
+      DATABASE_USER: depsets_robot
+      DATABASE_PASSWORD: "d3p53t5"
+
+  depsetdb:
     image: postgres:11
 
     volumes:

@@ -1,15 +1,18 @@
 #!/bin/bash
 
-DATABASE_HOST=localhost \
-DATABASE_NAME=depsets \
-DATABASE_USER=depsets_robot \
-DATABASE_PASSWORD="d3p53t5" \
-../cmd/depset/depset &
-SERVER_PID=$!
-
-echo "Server Started"
-
-sleep 1
+if [ "$#" -gt 0 ]
+then
+  echo "Server assumed to be running on $1"
+else
+  DATABASE_HOST=localhost \
+  DATABASE_NAME=depsets \
+  DATABASE_USER=depsets_robot \
+  DATABASE_PASSWORD="d3p53t5" \
+  ../cmd/depset/depset &
+  SERVER_PID=$!
+  echo "Server Started"
+  sleep 1
+fi
 
 echo "Sending command:"
 tmpfile=$(mktemp /tmp/integration-test.XXXXXX)
@@ -26,7 +29,10 @@ echo "Output:"
 cat $tmpfile
 echo
 
-sleep 1
+sleep 1s
 
 rm $tmpfile
-kill $SERVER_PID
+if [ ! -z "$SERVER_PID" ]
+then
+  kill $SERVER_PID
+fi
