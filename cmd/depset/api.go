@@ -47,19 +47,25 @@ func isZeroHash(h string) bool {
 
 func (s *server) listSets() httprouter.Handle {
 	return func(w http.ResponseWriter, r *http.Request, params httprouter.Params) {
-		modules, err := s.selectAllSets(params.ByName("orgId"), params.ByName("appId"))
+		sets, err := s.selectAllSets(params.ByName("orgId"), params.ByName("appId"))
 		if err != nil {
 			w.WriteHeader(500)
 			return
 		}
 
-		jsonModules, err := json.Marshal(modules)
+		// Handle special case of empty list as it could just be nil.
+		if len(sets) == 0 {
+			fmt.Fprintf(w, `[]`)
+			return
+		}
+
+		jsonSets, err := json.Marshal(sets)
 		if err != nil {
 			log.Println(err)
 			w.WriteHeader(500)
 			return
 		}
-		w.Write(jsonModules)
+		w.Write(jsonSets)
 	}
 }
 

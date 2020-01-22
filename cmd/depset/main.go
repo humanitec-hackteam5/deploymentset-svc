@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gorilla/handlers"
 	"github.com/julienschmidt/httprouter"
 	_ "github.com/lib/pq"
 )
@@ -102,5 +103,5 @@ func main() {
 	}
 
 	log.Printf("Listening on Port %s", port)
-	log.Fatal(http.ListenAndServe(":"+port, s.router))
+	log.Fatal(http.ListenAndServe(":"+port, handlers.LoggingHandler(os.Stdout, s.router)))
 }
