@@ -5,18 +5,35 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"reflect"
 	"testing"
 	"time"
 
 	"github.com/golang/mock/gomock"
+	"github.com/matryer/is"
 	"humanitec.io/deploymentset-svc/pkg/depset"
 )
 
-func TestGetSet(t *testing.T) {
-	ctrl := gomock.NewController(t)
+func ExecuteRequest(m modeler, method, url string, t *testing.T) *httptest.ResponseRecorder {
+	server := server{
+		model: m,
+	}
+	server.setupRoutes()
 
-	// Assert that Bar() is invoked.
+	req, err := http.NewRequest(method, url, nil)
+	if err != nil {
+		t.Errorf("creating request: %v", err)
+	}
+
+	w := httptest.NewRecorder()
+
+	server.router.ServeHTTP(w, req)
+
+	return w
+}
+
+func TestGetSet(t *testing.T) {
+	is := is.New(t)
+	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
 	m := NewMockmodeler(ctrl)
@@ -43,27 +60,91 @@ func TestGetSet(t *testing.T) {
 		Return(expectedSetWrapper, nil).
 		Times(1)
 
-	server := server{
-		model: m,
-	}
-	server.setupRoutes()
+	res := ExecuteRequest(m, "GET", fmt.Sprintf("/orgs/%s/apps/%s/sets/%s", orgID, appID, setID), t)
 
-	req, err := http.NewRequest("GET", fmt.Sprintf("/orgs/%s/apps/%s/sets/%s", orgID, appID, setID), nil)
-	if err != nil {
-		t.Errorf("creating request : %v", err)
-	}
-	w := httptest.NewRecorder()
-	server.router.ServeHTTP(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Errorf("Expected status 200, got : %v", w.Code)
-	}
+	is.Equal(res.Code, http.StatusOK) // Should return 200
 
 	var returnedSetWrapper SetWrapper
-	json.Unmarshal(w.Body.Bytes(), &returnedSetWrapper)
+	json.Unmarshal(res.Body.Bytes(), &returnedSetWrapper)
 
-	if !reflect.DeepEqual(returnedSetWrapper, expectedSetWrapper) {
-		t.Errorf("Expected: `%+v`, got `%+v`", expectedSetWrapper, returnedSetWrapper)
+	is.Equal(returnedSetWrapper, expectedSetWrapper) // Returnned Set should match initilal set
+
+}
+
+func TestGetAllSets(t *testing.T) {
+	is := is.New(t)
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	m := NewMockmodeler(ctrl)
+
+	orgID := "test-org"
+	appID := "test-app"
+	expectedSetWrappers := []SetWrapper{
+		SetWrapper{
+			Metadata: SetMetadata{
+				CreatedAt: time.Date(2020, time.January, 1, 1, 0, 0, 0, time.UTC),
+			},
+			Content: depset.Set{
+				Modules: map[string]depset.ModuleSpec{
+					"test-module": depset.ModuleSpec{
+						"version": "TEST_VERSION",
+					},
+				},
+			},
+		},
+		SetWrapper{
+			Metadata: SetMetadata{
+				CreatedAt: time.Date(2020, time.January, 1, 2, 0, 0, 0, time.UTC),
+			},
+			Content: depset.Set{
+				Modules: map[string]depset.ModuleSpec{
+					"test-module2": depset.ModuleSpec{
+						"version": "TEST_VERSION2",
+					},
+				},
+			},
+		},
 	}
+
+	m.
+		EXPECT().
+		selectAllSets(orgID, appID).
+		Return(expectedSetWrappers, nil).
+		Times(1)
+
+	res := ExecuteRequest(m, "GET", fmt.Sprintf("/orgs/%s/apps/%s/sets", orgID, appID), t)
+
+	is.Equal(res.Code, http.StatusOK) // Should return 200
+
+	var returnedSetWrappers []SetWrapper
+	json.Unmarshal(res.Body.Bytes(), &returnedSetWrappers)
+
+	is.Equal(returnedSetWrappers, expectedSetWrappers) // Returned Sets should match initilal sets
+
+}
+
+func TestGetAllSets_NoSets(t *testing.T) {
+	is := is.New(t)
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	m := NewMockmodeler(ctrl)
+
+	orgID := "test-org"
+	appID := "test-app"
+	expectedSetWrappers := []SetWrapper{}
+
+	m.
+		EXPECT().
+		selectAllSets(orgID, appID).
+		Return(expectedSetWrappers, nil).
+		Times(1)
+
+	res := ExecuteRequest(m, "GET", fmt.Sprintf("/orgs/%s/apps/%s/sets", orgID, appID), t)
+
+	is.Equal(res.Code, http.StatusOK) // Should return 200
+
+	is.Equal(res.Body.String(), "[]") // Returned Sets should be empty array
 
 }
