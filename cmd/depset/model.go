@@ -10,6 +10,10 @@ import (
 	"humanitec.io/deploymentset-svc/pkg/depset"
 )
 
+type model struct {
+	*sql.DB
+}
+
 type persistableSet depset.Set
 type persistableSetMetadata SetMetadata
 
@@ -66,8 +70,8 @@ func (d *persistableDelta) Scan(value interface{}) error {
 	return json.Unmarshal(b, &d)
 }
 
-func (s *server) selectAllSets(orgID string, appID string) ([]SetWrapper, error) {
-	rows, err := s.db.Query(`SELECT id, metadata, content FROM sets WHERE org_id = $1 AND app_id = $2`, orgID, appID)
+func (db model) selectAllSets(orgID string, appID string) ([]SetWrapper, error) {
+	rows, err := db.Query(`SELECT id, metadata, content FROM sets WHERE org_id = $1 AND app_id = $2`, orgID, appID)
 	defer rows.Close()
 	if err != nil {
 		log.Printf("Database error fetching sets in org `%s` and app `%s`.", orgID, appID)
@@ -84,8 +88,8 @@ func (s *server) selectAllSets(orgID string, appID string) ([]SetWrapper, error)
 	return sets, nil
 }
 
-func (s *server) selectSet(orgID string, appID string, setID string) (SetWrapper, error) {
-	row := s.db.QueryRow(`SELECT id, metadata, content FROM sets WHERE org_id = $1 AND app_id = $2 AND id = $3`, orgID, appID, setID)
+func (db model) selectSet(orgID string, appID string, setID string) (SetWrapper, error) {
+	row := db.QueryRow(`SELECT id, metadata, content FROM sets WHERE org_id = $1 AND app_id = $2 AND id = $3`, orgID, appID, setID)
 	var sw SetWrapper
 	err := row.Scan(&sw.ID, (*persistableSetMetadata)(&sw.Metadata), (*persistableSet)(&sw.Content))
 	if err == sql.ErrNoRows {
@@ -98,8 +102,8 @@ func (s *server) selectSet(orgID string, appID string, setID string) (SetWrapper
 	return sw, nil
 }
 
-func (s *server) selectRawSet(orgID string, appID string, setID string) (depset.Set, error) {
-	row := s.db.QueryRow(`SELECT content FROM sets WHERE org_id = $1 AND app_id = $2 AND id = $3`, orgID, appID, setID)
+func (db model) selectRawSet(orgID string, appID string, setID string) (depset.Set, error) {
+	row := db.QueryRow(`SELECT content FROM sets WHERE org_id = $1 AND app_id = $2 AND id = $3`, orgID, appID, setID)
 	var set depset.Set
 	err := row.Scan((*persistableSet)(&set))
 	if err == sql.ErrNoRows {
@@ -112,8 +116,8 @@ func (s *server) selectRawSet(orgID string, appID string, setID string) (depset.
 	return set, nil
 }
 
-func (s *server) insertSet(orgID string, appID string, sw SetWrapper) error {
-	result, err := s.db.Exec(`INSERT INTO sets (org_id, app_id, id, metadata, content ) VALUES ($1, $2, $3, $4, $5) ON CONFLICT DO NOTHING`, orgID, appID, sw.ID, (*persistableSetMetadata)(&sw.Metadata), (*persistableSet)(&sw.Content))
+func (db model) insertSet(orgID string, appID string, sw SetWrapper) error {
+	result, err := db.Exec(`INSERT INTO sets (org_id, app_id, id, metadata, content ) VALUES ($1, $2, $3, $4, $5) ON CONFLICT DO NOTHING`, orgID, appID, sw.ID, (*persistableSetMetadata)(&sw.Metadata), (*persistableSet)(&sw.Content))
 	if err != nil {
 		log.Printf("Database error inserting set in org `%s` and app `%s` with Id `%s`.", orgID, appID, sw.ID)
 		log.Println(err)

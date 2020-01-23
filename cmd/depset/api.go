@@ -20,7 +20,7 @@ type SetWrapper struct {
 
 // SetMetadata contains things like first creation date and who created it
 type SetMetadata struct {
-	CreateAt time.Time `json:"createdAt"`
+	CreatedAt time.Time `json:"createdAt"`
 }
 
 // DeltaWrapper represents the "over-the-wire" structure of a Deployment Delta
@@ -47,7 +47,7 @@ func isZeroHash(h string) bool {
 
 func (s *server) listSets() httprouter.Handle {
 	return func(w http.ResponseWriter, r *http.Request, params httprouter.Params) {
-		sets, err := s.selectAllSets(params.ByName("orgId"), params.ByName("appId"))
+		sets, err := s.model.selectAllSets(params.ByName("orgId"), params.ByName("appId"))
 		if err != nil {
 			w.WriteHeader(500)
 			return
@@ -71,7 +71,7 @@ func (s *server) listSets() httprouter.Handle {
 
 func (s *server) getSet() httprouter.Handle {
 	return func(w http.ResponseWriter, r *http.Request, params httprouter.Params) {
-		module, err := s.selectSet(params.ByName("orgId"), params.ByName("appId"), params.ByName("setId"))
+		module, err := s.model.selectSet(params.ByName("orgId"), params.ByName("appId"), params.ByName("setId"))
 		if err != nil {
 			w.WriteHeader(500)
 			return
@@ -98,7 +98,7 @@ func (s *server) applyDelta() httprouter.Handle {
 
 		var set depset.Set
 		if !isZeroHash(params.ByName("setId")) {
-			set, err = s.selectRawSet(params.ByName("orgId"), params.ByName("appId"), params.ByName("setId"))
+			set, err = s.model.selectRawSet(params.ByName("orgId"), params.ByName("appId"), params.ByName("setId"))
 			if err == ErrNotFound {
 				w.WriteHeader(404)
 				fmt.Fprintf(w, `"Set with ID \"%s\" does not exist."`, params.ByName("setId"))
@@ -117,7 +117,7 @@ func (s *server) applyDelta() httprouter.Handle {
 		}
 		newSw.ID = newSw.Content.Hash()
 
-		err = s.insertSet(params.ByName("orgId"), params.ByName("appId"), newSw)
+		err = s.model.insertSet(params.ByName("orgId"), params.ByName("appId"), newSw)
 		if err == ErrAlreadyExists {
 			w.WriteHeader(200)
 		} else if err != nil {
