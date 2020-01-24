@@ -36,6 +36,7 @@ type DeltaMetadata struct {
 	LastModifiedAt time.Time `json:"lastModifiedAt"`
 }
 
+// isZeroHash returns true if the string is entirely made of zeros
 func isZeroHash(h string) bool {
 	for _, c := range h {
 		if c != '0' {
@@ -45,6 +46,9 @@ func isZeroHash(h string) bool {
 	return true
 }
 
+// listSets returns a handler which returns a list of all the sets in the specified app.
+//
+// The handler expects the organization to be defined by a parameter "orgId" and app by "appId"
 func (s *server) listSets() httprouter.Handle {
 	return func(w http.ResponseWriter, r *http.Request, params httprouter.Params) {
 		sets, err := s.model.selectAllSets(params.ByName("orgId"), params.ByName("appId"))
@@ -69,6 +73,9 @@ func (s *server) listSets() httprouter.Handle {
 	}
 }
 
+// getSets returns a handler which returns a specific sets in the specified app.
+//
+// The handler expects the organization to be defined by a parameter "orgId", the app by "appId" and the set by "setId"
 func (s *server) getSet() httprouter.Handle {
 	return func(w http.ResponseWriter, r *http.Request, params httprouter.Params) {
 		module, err := s.model.selectSet(params.ByName("orgId"), params.ByName("appId"), params.ByName("setId"))
@@ -86,6 +93,23 @@ func (s *server) getSet() httprouter.Handle {
 	}
 }
 
+// applyDelta returns a handler which applies a delta to a specified set.
+//
+// The handler expects the organization to be defined by a parameter "orgId", the app by "appId" and the set by "setId"
+//
+// The Delta should be provided in the body.
+//
+// The handler returns the following status codes:
+//
+// 200 Delta applied, set already exists; body of response is new set ID
+//
+// 201 Delta applied, set was created for first time; body of response is new set ID
+//
+// 400 Delta is not compatible with set
+//
+// 404 Set was not found
+//
+// 422 Delta was malformed
 func (s *server) applyDelta() httprouter.Handle {
 	return func(w http.ResponseWriter, r *http.Request, params httprouter.Params) {
 		var delta depset.Delta
@@ -114,6 +138,7 @@ func (s *server) applyDelta() httprouter.Handle {
 		if err != nil {
 			w.WriteHeader(400)
 			fmt.Fprintf(w, `"Delta is not compatible with Set"`)
+			return
 		}
 		newSw.ID = newSw.Content.Hash()
 

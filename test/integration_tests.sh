@@ -9,7 +9,7 @@ else
   DATABASE_NAME=depsets \
   DATABASE_USER=depsets_robot \
   DATABASE_PASSWORD="d3p53t5" \
-  ../cmd/depset/depset &
+  ../cmd/depsets/depsets &
   SERVER_PID=$!
   echo "Server Started"
   sleep 1
