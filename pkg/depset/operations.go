@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"reflect"
 	"sort"
 )
 
@@ -81,6 +82,85 @@ func (inputSet Set) Apply(delta Delta) (Set, error) {
 	}
 
 	return set, nil
+}
+
+func max(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+func moduleSpecDiff(left, right ModuleSpec) []UpdateAction {
+	updates := make([]UpdateAction, 0, max(len(left), len(right)))
+
+	for rightSpec := range right {
+		_, exists := left[rightSpec]
+		if exists {
+			// config is common to both - replace
+			// only update if they are different
+			if !reflect.DeepEqual(left[rightSpec], right[rightSpec]) {
+				updates = append(updates, UpdateAction{
+					Operation: "replace",
+					Path:      rightSpec,
+					Value:     left[rightSpec],
+				})
+			}
+		} else {
+			// 	only in right - should be removed
+			updates = append(updates, UpdateAction{
+				Operation: "remove",
+				Path:      rightSpec,
+			})
+		}
+	}
+
+	for leftSpec := range left {
+		_, exists := right[leftSpec]
+		if !exists {
+			// config is only in right - add
+			updates = append(updates, UpdateAction{
+				Operation: "add",
+				Path:      leftSpec,
+				Value:     left[leftSpec],
+			})
+		}
+	}
+	return updates
+}
+
+// Diff generates the Delta between two sets. Specifically, if the generated delta is applied to rightSet, leftSet is
+// generated.
+func (leftSet Set) Diff(rightSet Set) Delta {
+	delta := Delta{
+		Modules: ModuleDeltas{
+			Remove: make([]string, 0, max(len(leftSet.Modules), len(rightSet.Modules))),
+			Add:    make(map[string]ModuleSpec),
+			Update: make(map[string][]UpdateAction),
+		},
+	}
+	// Find all modules that are in rightSet but not in leftSet
+	// Also deal with modules that are common to both
+	for rightModuleName := range rightSet.Modules {
+		_, exists := leftSet.Modules[rightModuleName]
+		if exists {
+			// Module is common to both
+			delta.Modules.Update[rightModuleName] = moduleSpecDiff(leftSet.Modules[rightModuleName], rightSet.Modules[rightModuleName])
+		} else {
+			// Module is only in right - mark to remove
+			delta.Modules.Remove = append(delta.Modules.Remove, rightModuleName)
+		}
+	}
+
+	// Find all modules that are in leftSet but not in leftSet
+	for leftModuleName := range leftSet.Modules {
+		_, exists := rightSet.Modules[leftModuleName]
+		if !exists {
+			// Module is only in left - add it
+			delta.Modules.Add[leftModuleName] = leftSet.Modules[leftModuleName]
+		}
+	}
+	return delta
 }
 
 func getMapKeysAsSortedSlice(m map[string]interface{}) []string {

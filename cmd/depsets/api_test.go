@@ -419,3 +419,46 @@ func TestApplyDelta_DeltaNotCompatibleToInputSet(t *testing.T) {
 
 	is.Equal(res.Code, http.StatusBadRequest) // Should return 400
 }
+
+func TestDiff_ToEmptySet(t *testing.T) {
+	is := is.New(t)
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	m := NewMockmodeler(ctrl)
+
+	orgID := "test-org"
+	appID := "test-app"
+	leftSetID := "4efb2d1ae4f101a1ef4e0a08705910191868c5cc"
+	leftSet := depset.Set{
+		Modules: map[string]depset.ModuleSpec{
+			"test-module": depset.ModuleSpec{
+				"version": "TEST_VERSION",
+			},
+		},
+	}
+	expected := depset.Delta{
+		Modules: depset.ModuleDeltas{
+			Add: map[string]depset.ModuleSpec{
+				"test-module": depset.ModuleSpec{
+					"version": "TEST_VERSION",
+				},
+			},
+			Remove: []string{},
+			Update: map[string][]depset.UpdateAction{},
+		},
+	}
+
+	m.
+		EXPECT().
+		selectRawSet(orgID, appID, leftSetID).
+		Return(leftSet, nil).
+		Times(1)
+
+	res := ExecuteRequest(m, "GET", fmt.Sprintf("/orgs/%s/apps/%s/sets/%s?diff=%s", orgID, appID, leftSetID, "0"), nil, t)
+
+	var actualDelta depset.Delta
+	json.Unmarshal(res.Body.Bytes(), &actualDelta)
+
+	is.Equal(actualDelta, expected)
+}

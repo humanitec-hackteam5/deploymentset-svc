@@ -219,6 +219,104 @@ func TestApplyUpdateModuleNotFound(t *testing.T) {
 	}
 }
 
+func validateDiff(left, right Set, expected Delta, t *testing.T) {
+	generatedDelta := left.Diff(right)
+
+	// NOTE, we are using reflect.DeepEqual here. There are a few gotchas:
+	// 1. it compares typed nils differently. e.g. nil != map[string]interface{}
+	// 2. it compares slice order strictly. In the case of deltas, slice order e.g. in Delta.Modules.Remove is arbitary
+	if !reflect.DeepEqual(generatedDelta, expected) {
+		t.Errorf("Expected: `%v`, got `%v`", expected, generatedDelta)
+	}
+}
+
+func TestDiffToEmptySet(t *testing.T) {
+	emptySet := Set{}
+	left := Set{
+		Modules: map[string]ModuleSpec{
+			"test-module": ModuleSpec{
+				"version": "TEST_VERSION",
+			},
+		},
+	}
+	expected := Delta{
+		Modules: ModuleDeltas{
+			Add: map[string]ModuleSpec{
+				"test-module": ModuleSpec{
+					"version": "TEST_VERSION",
+				},
+			},
+			Remove: []string{},
+			Update: map[string][]UpdateAction{},
+		},
+	}
+	validateDiff(left, emptySet, expected, t)
+}
+
+func TestDiffFromEmptySet(t *testing.T) {
+	emptySet := Set{}
+	right := Set{
+		Modules: map[string]ModuleSpec{
+			"test-module": ModuleSpec{
+				"version": "TEST_VERSION",
+			},
+		},
+	}
+	expected := Delta{
+		Modules: ModuleDeltas{
+			Add:    map[string]ModuleSpec{},
+			Remove: []string{"test-module"},
+			Update: map[string][]UpdateAction{},
+		},
+	}
+	validateDiff(emptySet, right, expected, t)
+}
+
+func TestDiffAllChange(t *testing.T) {
+	left := Set{
+		Modules: map[string]ModuleSpec{
+			"only-left": ModuleSpec{
+				"version": "TEST_VERSION_LEFT",
+			},
+			"in-both": ModuleSpec{
+				"only-left":  "TEST_VERSION_LEFT",
+				"in-both-01": "LEFT_VALUE",
+				"in-both-02": "SAME_VALUE",
+			},
+		},
+	}
+	right := Set{
+		Modules: map[string]ModuleSpec{
+			"only-right": ModuleSpec{
+				"version": "TEST_VERSION_RIGHT",
+			},
+			"in-both": ModuleSpec{
+				"only-right": "TEST_VERSION_RIGHT",
+				"in-both-01": "RIGHT_VALUE",
+				"in-both-02": "SAME_VALUE",
+			},
+		},
+	}
+	expected := Delta{
+		Modules: ModuleDeltas{
+			Add: map[string]ModuleSpec{
+				"only-left": ModuleSpec{
+					"version": "TEST_VERSION_LEFT",
+				},
+			},
+			Remove: []string{"only-right"},
+			Update: map[string][]UpdateAction{
+				"in-both": []UpdateAction{
+					UpdateAction{Operation: "remove", Path: "only-right"},
+					UpdateAction{Operation: "replace", Path: "in-both-01", Value: "LEFT_VALUE"},
+					UpdateAction{Operation: "add", Path: "only-left", Value: "TEST_VERSION_LEFT"},
+				},
+			},
+		},
+	}
+	validateDiff(left, right, expected, t)
+}
+
 func validateHash(inputSet Set, expected string, t *testing.T) {
 	actual := inputSet.Hash()
 	if expected != actual {

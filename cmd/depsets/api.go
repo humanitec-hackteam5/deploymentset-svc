@@ -73,23 +73,82 @@ func (s *server) listSets() httprouter.Handle {
 	}
 }
 
-// getSets returns a handler which returns a specific sets in the specified app.
+// getSets returns a handler which returns either:
+// - a specific set in the specified app.
+// - the difference between the specified set and another set
 //
 // The handler expects the organization to be defined by a parameter "orgId", the app by "appId" and the set by "setId"
-func (s *server) getSet() httprouter.Handle {
-	return func(w http.ResponseWriter, r *http.Request, params httprouter.Params) {
-		module, err := s.model.selectSet(params.ByName("orgId"), params.ByName("appId"), params.ByName("setId"))
+func (s *server) getSetOrDiff() httprouter.Handle {
+	getSet := func(w http.ResponseWriter, orgId, appId, setId string) {
+		set, err := s.model.selectSet(orgId, appId, setId)
 		if err != nil {
 			w.WriteHeader(500)
 			return
 		}
 
-		jsonModule, err := json.Marshal(module)
+		jsonSet, err := json.Marshal(set)
 		if err != nil {
 			log.Println(err)
 			w.WriteHeader(500)
 		}
-		w.Write(jsonModule)
+		w.Write(jsonSet)
+	}
+
+	// diff returns a Delta describing how to generate setId from paramSetId
+	//
+	// The handler expects the organization to be defined by a parameter "orgId", the app by "appId", the left set by "setId" and right set by "paramSetId"
+	//
+	//
+	// The handler returns the following status codes:
+	//
+	// 200 Delta was sucessfully calculated, will be in body
+	//
+	// 404 Set was not found one or other of the setIds is not valid or present in the app.
+	diff := func(w http.ResponseWriter, orgId, appId, setId, paramSetId string) {
+		var leftSet depset.Set
+		var err error
+		if !isZeroHash(setId) {
+			leftSet, err = s.model.selectRawSet(orgId, appId, setId)
+			if err == ErrNotFound {
+				w.WriteHeader(404)
+				fmt.Fprintf(w, `"Set with ID \"%s\" does not exist."`, setId)
+				return
+			} else if err != nil {
+				w.WriteHeader(500)
+				return
+			}
+		}
+
+		var rightSet depset.Set
+		if !isZeroHash(paramSetId) {
+			rightSet, err = s.model.selectRawSet(orgId, appId, paramSetId)
+			if err == ErrNotFound {
+				w.WriteHeader(404)
+				fmt.Fprintf(w, `"Set with ID \"%s\" does not exist."`, paramSetId)
+				return
+			} else if err != nil {
+				w.WriteHeader(500)
+				return
+			}
+		}
+
+		delta := leftSet.Diff(rightSet)
+
+		jsonDelta, err := json.Marshal(delta)
+		if err != nil {
+			log.Println(err)
+			w.WriteHeader(500)
+		}
+		w.WriteHeader(200)
+		w.Write(jsonDelta)
+	}
+	return func(w http.ResponseWriter, r *http.Request, params httprouter.Params) {
+		diffSetId, exists := r.URL.Query()["diff"]
+		if exists {
+			diff(w, params.ByName("orgId"), params.ByName("appId"), params.ByName("setId"), diffSetId[0])
+		} else {
+			getSet(w, params.ByName("orgId"), params.ByName("appId"), params.ByName("setId"))
+		}
 	}
 }
 
@@ -113,6 +172,11 @@ func (s *server) getSet() httprouter.Handle {
 func (s *server) applyDelta() httprouter.Handle {
 	return func(w http.ResponseWriter, r *http.Request, params httprouter.Params) {
 		var delta depset.Delta
+		if r.Body == nil {
+			w.WriteHeader(422)
+			log.Printf("Body of request was nil")
+			return
+		}
 		err := json.NewDecoder(r.Body).Decode(&delta)
 		if nil != err {
 			w.WriteHeader(422)
