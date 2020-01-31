@@ -145,7 +145,10 @@ func (leftSet Set) Diff(rightSet Set) Delta {
 		_, exists := leftSet.Modules[rightModuleName]
 		if exists {
 			// Module is common to both
-			delta.Modules.Update[rightModuleName] = moduleSpecDiff(leftSet.Modules[rightModuleName], rightSet.Modules[rightModuleName])
+			updates := moduleSpecDiff(leftSet.Modules[rightModuleName], rightSet.Modules[rightModuleName])
+			if len(updates) > 0 {
+				delta.Modules.Update[rightModuleName] = updates
+			}
 		} else {
 			// Module is only in right - mark to remove
 			delta.Modules.Remove = append(delta.Modules.Remove, rightModuleName)
