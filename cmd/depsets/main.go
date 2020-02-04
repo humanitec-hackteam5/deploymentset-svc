@@ -6,7 +6,6 @@ import (
 	"os"
 
 	"github.com/gorilla/handlers"
-	"github.com/julienschmidt/httprouter"
 	_ "github.com/lib/pq"
 	"humanitec.io/deploymentset-svc/pkg/depset"
 )
@@ -20,7 +19,7 @@ type modeler interface {
 
 type server struct {
 	model  modeler
-	router *httprouter.Router
+	router http.Handler
 }
 
 func main() {

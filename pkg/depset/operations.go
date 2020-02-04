@@ -25,8 +25,7 @@ func copyModuleSpec(ms ModuleSpec) ModuleSpec {
 	return out
 }
 
-// Apply generates a new Deployment Set from an existsing set by applying a Deployment Delat
-// Both the Set and Delte objects can be big so use pointers. (Question: is this deomatic go?)
+// Apply generates a new Deployment Set from an existsing set by applying a Deployment Delta.
 func (inputSet Set) Apply(delta Delta) (Set, error) {
 	// Note: The Set structure makes a lot of use of map
 	// In Go, maps are always passed by referece, so they should not be mutated
@@ -211,6 +210,7 @@ func getModulesAsSortedSlice(m map[string]ModuleSpec) [][2]interface{} {
 // Hash generates an invarient id for a Deployment Set
 func (inputSet Set) Hash() string {
 	// For now, we hack it by converting the deployment set into an array structure
+	// This is because we cannot control key order using the built in go json serializer.
 
 	// sepecial case for the empty set, the hash is zero
 	if len(inputSet.Modules) == 0 {

@@ -420,7 +420,7 @@ func TestApplyDelta_DeltaNotCompatibleToInputSet(t *testing.T) {
 	is.Equal(res.Code, http.StatusBadRequest) // Should return 400
 }
 
-func TestDiff_ToEmptySet(t *testing.T) {
+func TestDiff_FromEmptySet(t *testing.T) {
 	is := is.New(t)
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
