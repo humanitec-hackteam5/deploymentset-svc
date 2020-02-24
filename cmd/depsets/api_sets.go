@@ -23,19 +23,6 @@ type SetMetadata struct {
 	CreatedAt time.Time `json:"createdAt"`
 }
 
-// DeltaWrapper represents the "over-the-wire" structure of a Deployment Delta
-type DeltaWrapper struct {
-	Name     string        `json:"name"`
-	Metadata DeltaMetadata `json:"metadata"`
-	Content  depset.Delta  `json:"content"`
-}
-
-// DeltaMetadata contains things like first creation date and who created it
-type DeltaMetadata struct {
-	CreateAt       time.Time `json:"createdAt"`
-	LastModifiedAt time.Time `json:"lastModifiedAt"`
-}
-
 // isZeroHash returns true if the string is entirely made of zeros
 func isZeroHash(h string) bool {
 	for _, c := range h {

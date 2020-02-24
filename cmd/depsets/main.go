@@ -15,6 +15,10 @@ type modeler interface {
 	selectAllSets(orgID string, appID string) ([]SetWrapper, error)
 	selectSet(orgID string, appID string, setID string) (SetWrapper, error)
 	selectRawSet(orgID string, appID string, setID string) (depset.Set, error)
+	selectAllDeltas(orgID string, appID string) ([]DeltaWrapper, error)
+	insertDelta(orgID string, appID string, locked bool, metadata DeltaMetadata, content depset.Delta) (string, error)
+	updateDelta(orgID, appID, deltaID string, locked bool, metadata DeltaMetadata, content depset.Delta) error
+	selectDelta(orgID string, appID string, deltaID string) (DeltaWrapper, error)
 }
 
 type server struct {

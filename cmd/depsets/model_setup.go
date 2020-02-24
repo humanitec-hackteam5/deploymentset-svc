@@ -55,20 +55,17 @@ func initDb(db *sql.DB) error {
 		log.Println("Unable to create sets table.")
 		log.Fatal(err)
 	}
-	/*
-			_, err = db.Exec(`CREATE TABLE IF NOT EXISTS deltas (
-			    id          SERIAL PRIMARY KEY,
-		      org_id      TEXT NOT NULL,
-		      app_id      TEXT NOT NULL,
-		      name        TEXT NOT NULL,
-					metadata    JSONB NOT NULL,
-		      content     JSONB NOT NULL
-		      UNIQUE(org_id,app_id,name)`)
-			if err != nil {
-				log.Println("Unable to create deltas table.")
-				log.Fatal(err)
-			}
-	*/
+	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS deltas (
+	    id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+      org_id      TEXT NOT NULL,
+      app_id      TEXT NOT NULL,
+			locked      BOOLEAN NOT NULL,
+			metadata    JSONB NOT NULL,
+      content     JSONB NOT NULL`)
+	if err != nil {
+		log.Println("Unable to create deltas table.")
+		log.Fatal(err)
+	}
 	return nil
 }
 

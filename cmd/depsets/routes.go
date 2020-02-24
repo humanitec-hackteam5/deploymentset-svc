@@ -9,5 +9,11 @@ func (s *server) setupRoutes() {
 	r.Methods("GET").Path("/orgs/{orgId}/apps/{appId}/sets/{setId}").Handler(s.getSet())
 	r.Methods("GET").Path("/orgs/{orgId}/apps/{appId}/sets").Handler(s.listSets())
 
+	r.Methods("GET").Path("/orgs/{orgId}/apps/{appId}/deltas").Handler(s.listDeltas())
+	r.Methods("POST").Path("/orgs/{orgId}/apps/{appId}/deltas").Handler(s.createDelta())
+	r.Methods("GET").Path("/orgs/{orgId}/apps/{appId}/deltas/{deltaId}").Handler(s.getDelta())
+	r.Methods("PUT").Path("/orgs/{orgId}/apps/{appId}/deltas/{deltaId}").Handler(s.replaceDelta())
+	//	r.Methods("PATCH").Path("/orgs/{orgId}/apps/{appId}/deltas/{deltaId}").Handler(s.updateDelta())
+
 	s.router = r
 }

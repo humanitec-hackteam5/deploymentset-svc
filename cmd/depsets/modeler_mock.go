@@ -5,10 +5,9 @@
 package main
 
 import (
-	reflect "reflect"
-
 	gomock "github.com/golang/mock/gomock"
 	depset "humanitec.io/deploymentset-svc/pkg/depset"
+	reflect "reflect"
 )
 
 // Mockmodeler is a mock of modeler interface
@@ -91,4 +90,63 @@ func (m *Mockmodeler) selectRawSet(orgID, appID, setID string) (depset.Set, erro
 func (mr *MockmodelerMockRecorder) selectRawSet(orgID, appID, setID interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "selectRawSet", reflect.TypeOf((*Mockmodeler)(nil).selectRawSet), orgID, appID, setID)
+}
+
+// selectAllDeltas mocks base method
+func (m *Mockmodeler) selectAllDeltas(orgID, appID string) ([]DeltaWrapper, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "selectAllDeltas", orgID, appID)
+	ret0, _ := ret[0].([]DeltaWrapper)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// selectAllDeltas indicates an expected call of selectAllDeltas
+func (mr *MockmodelerMockRecorder) selectAllDeltas(orgID, appID interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "selectAllDeltas", reflect.TypeOf((*Mockmodeler)(nil).selectAllDeltas), orgID, appID)
+}
+
+// insertDelta mocks base method
+func (m *Mockmodeler) insertDelta(orgID, appID string, locked bool, metadata DeltaMetadata, content depset.Delta) (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "insertDelta", orgID, appID, locked, metadata, content)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// insertDelta indicates an expected call of insertDelta
+func (mr *MockmodelerMockRecorder) insertDelta(orgID, appID, locked, metadata, content interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "insertDelta", reflect.TypeOf((*Mockmodeler)(nil).insertDelta), orgID, appID, locked, metadata, content)
+}
+
+// updateDelta mocks base method
+func (m *Mockmodeler) updateDelta(orgID, appID, deltaID string, locked bool, metadata DeltaMetadata, content depset.Delta) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "updateDelta", orgID, appID, deltaID, locked, metadata, content)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// updateDelta indicates an expected call of updateDelta
+func (mr *MockmodelerMockRecorder) updateDelta(orgID, appID, deltaID, locked, metadata, content interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "updateDelta", reflect.TypeOf((*Mockmodeler)(nil).updateDelta), orgID, appID, deltaID, locked, metadata, content)
+}
+
+// selectDelta mocks base method
+func (m *Mockmodeler) selectDelta(orgID, appID, deltaID string) (DeltaWrapper, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "selectDelta", orgID, appID, deltaID)
+	ret0, _ := ret[0].(DeltaWrapper)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// selectDelta indicates an expected call of selectDelta
+func (mr *MockmodelerMockRecorder) selectDelta(orgID, appID, deltaID interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "selectDelta", reflect.TypeOf((*Mockmodeler)(nil).selectDelta), orgID, appID, deltaID)
 }

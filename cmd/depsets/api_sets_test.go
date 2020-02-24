@@ -15,6 +15,9 @@ import (
 	"humanitec.io/deploymentset-svc/pkg/depset"
 )
 
+// NOTE: *_mock.go files are generated via the following commands:
+// $ mockgen -source=main.go -destination=modeler_mock.go -package=main modeler
+
 // Custom matcher that only looks at the set part of a SetWrapper
 type justSet struct{ s depset.Set }
 
