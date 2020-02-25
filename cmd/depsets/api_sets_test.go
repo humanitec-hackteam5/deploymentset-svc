@@ -423,6 +423,73 @@ func TestApplyDelta_DeltaNotCompatibleToInputSet(t *testing.T) {
 	is.Equal(res.Code, http.StatusBadRequest) // Should return 400
 }
 
+func TestApplyDelta_EmptyDelta(t *testing.T) {
+	is := is.New(t)
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	m := NewMockmodeler(ctrl)
+
+	orgID := "test-org"
+	appID := "test-app"
+	delta := depset.Delta{}
+	inputSetID := "27036a0c4ce1cda91addbd67ca65d499dfbeb9d0"
+	inputSet := depset.Set{
+		Modules: map[string]depset.ModuleSpec{
+			"test-module01": depset.ModuleSpec{
+				"version": "TEST_VERSION01",
+			},
+		},
+	}
+
+	m.
+		EXPECT().
+		selectRawSet(gomock.Eq(orgID), gomock.Eq(appID), inputSetID).
+		Return(inputSet, nil).
+		Times(1)
+
+	buf, err := json.Marshal(delta)
+	is.NoErr(err)
+	body := bytes.NewBuffer(buf)
+
+	res := ExecuteRequest(m, "POST", fmt.Sprintf("/orgs/%s/apps/%s/sets/%s", orgID, appID, inputSetID), body, t)
+
+	is.Equal(res.Code, http.StatusOK) // Should return 200
+
+	var outputID string
+	json.Unmarshal(res.Body.Bytes(), &outputID)
+
+	is.Equal(outputID, inputSetID) // Returned Sets should match initial set
+
+}
+
+func TestApplyDelta_EmptyDeltaEmptySet(t *testing.T) {
+	is := is.New(t)
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	m := NewMockmodeler(ctrl)
+
+	orgID := "test-org"
+	appID := "test-app"
+	delta := depset.Delta{}
+	inputSetID := "0"
+
+	buf, err := json.Marshal(delta)
+	is.NoErr(err)
+	body := bytes.NewBuffer(buf)
+
+	res := ExecuteRequest(m, "POST", fmt.Sprintf("/orgs/%s/apps/%s/sets/%s", orgID, appID, inputSetID), body, t)
+
+	is.Equal(res.Code, http.StatusOK) // Should return 200
+
+	var outputID string
+	json.Unmarshal(res.Body.Bytes(), &outputID)
+
+	is.Equal(outputID, "0000000000000000000000000000000000000000") // Returned Sets should be empty set
+
+}
+
 func TestDiff_FromEmptySet(t *testing.T) {
 	is := is.New(t)
 	ctrl := gomock.NewController(t)

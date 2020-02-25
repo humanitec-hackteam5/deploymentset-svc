@@ -180,6 +180,17 @@ func (s *server) applyDelta() http.HandlerFunc {
 			}
 		}
 
+		if len(delta.Modules.Add) == 0 && len(delta.Modules.Remove) == 0 && len(delta.Modules.Update) == 0 {
+			// Short circuit for the empty delta
+			w.WriteHeader(200)
+			if isZeroHash(params["setId"]) {
+				fmt.Fprintf(w, `"0000000000000000000000000000000000000000"`)
+			} else {
+				fmt.Fprintf(w, `"%s"`, params["setId"])
+			}
+			return
+		}
+
 		newSw := SetWrapper{}
 		newSw.Content, err = set.Apply(delta)
 		if err != nil {
