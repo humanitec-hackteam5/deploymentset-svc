@@ -27,7 +27,7 @@ type DeltaMetadata struct {
 	Contributers   []string  `json:"contributers,omitempty"`
 }
 
-func IsInSlice(slice []string, str string) bool {
+func isInSlice(slice []string, str string) bool {
 	for i := range slice {
 		if slice[i] == str {
 			return true
@@ -128,15 +128,17 @@ func (s *server) createDelta() http.HandlerFunc {
 	}
 }
 
-// createDelta returns a handler which adds a delta to the specified app.
+// replaceDelta returns a handler which replaces a delta with an ne delta.
 //
-// The handler expects the organization to be defined by a parameter "orgId", the app by "appId".
+// The handler expects the organization to be defined by a parameter "orgId", the app by "appId" and deltaId by "deltaId".
 //
-// The Delta should be provided in the body.
+// The new Delta should be provided in the body.
 //
 // The handler returns the following status codes:
 //
-// 201 Delta created; body of response is new set ID
+// 200 Delta sucessfully replaced.
+//
+// 404 The deltaId was not found.
 //
 // 422 Delta was malformed
 func (s *server) replaceDelta() http.HandlerFunc {
@@ -165,8 +167,8 @@ func (s *server) replaceDelta() http.HandlerFunc {
 		metadata.LastModifiedAt = time.Now().UTC()
 		currentUser := getUser(r)
 
-		if currentUser != metadata.CreatedBy && !IsInSlice(metadata.Contributers, currentUser) {
-			newContributers := make([]string, len(metadata.Contributers)+1)
+		if currentUser != metadata.CreatedBy && !isInSlice(metadata.Contributers, currentUser) {
+			newContributers := make([]string, len(metadata.Contributers), len(metadata.Contributers)+1)
 			copy(newContributers, metadata.Contributers)
 			metadata.Contributers = append(newContributers, currentUser)
 		}

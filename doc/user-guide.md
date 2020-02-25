@@ -44,18 +44,20 @@ For example, given an initial Set that looks like:
 The Delta describing how to convert the first Set to the second Set would be:
 
     {
-      add: {
-        "module-three": {
-          "version": "3.0.0"
+      "modules": {
+        add: {
+          "module-three": {
+            "version": "3.0.0"
+          }
+        },
+        remove: [
+          "module-two"
+        ],
+        "update": {
+          "module-one": [
+            { "op": "replace", "path": "version", "value": "1.0.1" }
+          ]
         }
-      },
-      remove: [
-        "module-two"
-      ],
-      "update": {
-        "module-one": [
-          { "op": "replace", "path": "version", "value": "1.0.1" }
-        ]
       }
     }
 
@@ -89,19 +91,21 @@ If  we wish to generate the following Set:
 Our Delta would look as follows:
 
     {
-      "add": {
-        "module-one": {
-          "version": "1.0.0",
-          "configMap": {
-            "HELLO": "World!"
+      "modules": {
+        "add": {
+          "module-one": {
+            "version": "1.0.0",
+            "configMap": {
+              "HELLO": "World!"
+            }
+          },
+          "module-two": {
+            "version": "2.0.0",
+            "ingress": true,
+            "container_port": "8080"
           }
-        },
-        "module-two": {
-          "version": "2.0.0",
-          "ingress": true,
-          "container_port": "8080"
         }
-	    }
+      }
     }
 
 It would be applied as follows:

@@ -56,12 +56,13 @@ func initDb(db *sql.DB) error {
 		log.Fatal(err)
 	}
 	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS deltas (
-	    id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+	    id          SERIAL PRIMARY KEY,
       org_id      TEXT NOT NULL,
       app_id      TEXT NOT NULL,
 			locked      BOOLEAN NOT NULL,
 			metadata    JSONB NOT NULL,
-      content     JSONB NOT NULL`)
+      content     JSONB NOT NULL
+	)`)
 	if err != nil {
 		log.Println("Unable to create deltas table.")
 		log.Fatal(err)

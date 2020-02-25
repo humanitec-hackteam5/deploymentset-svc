@@ -159,6 +159,30 @@ func TestGetAllDeltas(t *testing.T) {
 
 }
 
+func TestGetAllDeltas_NoneExist(t *testing.T) {
+	is := is.New(t)
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	m := NewMockmodeler(ctrl)
+
+	orgID := "test-org"
+	appID := "test-app"
+
+	m.
+		EXPECT().
+		selectAllDeltas(orgID, appID).
+		Return(nil, nil).
+		Times(1)
+
+	res := ExecuteRequest(m, "GET", fmt.Sprintf("/orgs/%s/apps/%s/deltas", orgID, appID), nil, t)
+
+	is.Equal(res.Code, http.StatusOK) // Should return 200
+
+	is.Equal(res.Body.String(), "[]") // Empty array should be returned.
+
+}
+
 func TestCreateDelta(t *testing.T) {
 	is := is.New(t)
 	ctrl := gomock.NewController(t)
@@ -204,5 +228,180 @@ func TestCreateDelta(t *testing.T) {
 	json.Unmarshal(res.Body.Bytes(), &returnedDeltaID)
 
 	is.Equal(returnedDeltaID, deltaID) // Returned ID should match generated ID
+
+}
+
+func TestReplaceDelta(t *testing.T) {
+	is := is.New(t)
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	m := NewMockmodeler(ctrl)
+
+	orgID := "test-org"
+	appID := "test-app"
+	deltaID := "0123456789ABCDEFDEADBEEFDEADBEEFDEADBEEF"
+	// updatedBy := "test-user"
+	updatedBy := "UNKNOWN"
+	previousDelta := depset.Delta{
+		Modules: depset.ModuleDeltas{
+			Add: map[string]depset.ModuleSpec{
+				"test-module": depset.ModuleSpec{
+					"version": "TEST_VERSION",
+				},
+			},
+		},
+	}
+	previousMetadata := DeltaMetadata{
+		CreatedAt:      time.Date(2020, time.January, 1, 1, 0, 0, 0, time.UTC),
+		CreatedBy:      "previous-user",
+		LastModifiedAt: time.Date(2020, time.January, 1, 1, 0, 0, 0, time.UTC),
+		Contributers:   []string{},
+	}
+	userProvidedDelta := depset.Delta{
+		Modules: depset.ModuleDeltas{
+			Add: map[string]depset.ModuleSpec{
+				"test-module": depset.ModuleSpec{
+					"version": "TEST_VERSION02",
+				},
+			},
+		},
+	}
+	expecetdMetadata := DeltaMetadata{
+		CreatedAt:      time.Date(2020, time.January, 1, 1, 0, 0, 0, time.UTC),
+		CreatedBy:      "previous-user",
+		LastModifiedAt: time.Date(2020, time.January, 1, 2, 0, 0, 0, time.UTC),
+		Contributers:   []string{updatedBy},
+	}
+
+	m.
+		EXPECT().
+		selectDelta(orgID, appID, deltaID).
+		Return(DeltaWrapper{
+			ID:       deltaID,
+			Content:  previousDelta,
+			Metadata: previousMetadata,
+		}, nil).
+		Times(1)
+
+	m.
+		EXPECT().
+		updateDelta(orgID, appID, deltaID, false, IgnoreDateMetadata(expecetdMetadata), userProvidedDelta).
+		Return(nil).
+		Times(1)
+
+	buf, err := json.Marshal(userProvidedDelta)
+	is.NoErr(err)
+	body := bytes.NewBuffer(buf)
+
+	res := ExecuteRequest(m, "PUT", fmt.Sprintf("/orgs/%s/apps/%s/deltas/%s", orgID, appID, deltaID), body, t)
+
+	is.Equal(res.Code, http.StatusOK) // Should return 200
+
+}
+
+func TestReplaceDelta_SameUser(t *testing.T) {
+	is := is.New(t)
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	m := NewMockmodeler(ctrl)
+
+	orgID := "test-org"
+	appID := "test-app"
+	deltaID := "0123456789ABCDEFDEADBEEFDEADBEEFDEADBEEF"
+	// updatedBy := "test-user"
+	currentUser := "UNKNOWN"
+	previousDelta := depset.Delta{
+		Modules: depset.ModuleDeltas{
+			Add: map[string]depset.ModuleSpec{
+				"test-module": depset.ModuleSpec{
+					"version": "TEST_VERSION",
+				},
+			},
+		},
+	}
+	previousMetadata := DeltaMetadata{
+		CreatedAt:      time.Date(2020, time.January, 1, 1, 0, 0, 0, time.UTC),
+		CreatedBy:      "previous-user",
+		LastModifiedAt: time.Date(2020, time.January, 1, 1, 0, 0, 0, time.UTC),
+		Contributers:   []string{"different-user", currentUser},
+	}
+	userProvidedDelta := depset.Delta{
+		Modules: depset.ModuleDeltas{
+			Add: map[string]depset.ModuleSpec{
+				"test-module": depset.ModuleSpec{
+					"version": "TEST_VERSION02",
+				},
+			},
+		},
+	}
+	expecetdMetadata := DeltaMetadata{
+		CreatedAt:      time.Date(2020, time.January, 1, 1, 0, 0, 0, time.UTC),
+		CreatedBy:      "previous-user",
+		LastModifiedAt: time.Date(2020, time.January, 1, 2, 0, 0, 0, time.UTC),
+		Contributers:   []string{"different-user", currentUser},
+	}
+
+	m.
+		EXPECT().
+		selectDelta(orgID, appID, deltaID).
+		Return(DeltaWrapper{
+			ID:       deltaID,
+			Content:  previousDelta,
+			Metadata: previousMetadata,
+		}, nil).
+		Times(1)
+
+	m.
+		EXPECT().
+		updateDelta(orgID, appID, deltaID, false, IgnoreDateMetadata(expecetdMetadata), userProvidedDelta).
+		Return(nil).
+		Times(1)
+
+	buf, err := json.Marshal(userProvidedDelta)
+	is.NoErr(err)
+	body := bytes.NewBuffer(buf)
+
+	res := ExecuteRequest(m, "PUT", fmt.Sprintf("/orgs/%s/apps/%s/deltas/%s", orgID, appID, deltaID), body, t)
+
+	is.Equal(res.Code, http.StatusOK) // Should return 200
+
+}
+
+func TestReplaceDelta_DeltaDoesNotExist(t *testing.T) {
+	is := is.New(t)
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	m := NewMockmodeler(ctrl)
+
+	orgID := "test-org"
+	appID := "test-app"
+	deltaID := "0123456789ABCDEFDEADBEEFDEADBEEFDEADBEEF"
+
+	userProvidedDelta := depset.Delta{
+		Modules: depset.ModuleDeltas{
+			Add: map[string]depset.ModuleSpec{
+				"test-module": depset.ModuleSpec{
+					"version": "TEST_VERSION",
+				},
+			},
+		},
+	}
+
+	m.
+		EXPECT().
+		selectDelta(orgID, appID, deltaID).
+		Return(DeltaWrapper{}, ErrNotFound).
+		Times(1)
+
+	buf, err := json.Marshal(userProvidedDelta)
+	is.NoErr(err)
+	body := bytes.NewBuffer(buf)
+
+	res := ExecuteRequest(m, "PUT", fmt.Sprintf("/orgs/%s/apps/%s/deltas/%s", orgID, appID, deltaID), body, t)
+
+	is.Equal(res.Code, http.StatusNotFound) // Should return 404
 
 }
