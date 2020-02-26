@@ -1,4 +1,7 @@
 
+
+
+
 # Deployment Sets: A User Guide
 
 ## Definitions
@@ -55,7 +58,7 @@ The Delta describing how to convert the first Set to the second Set would be:
         ],
         "update": {
           "module-one": [
-            { "op": "replace", "path": "version", "value": "1.0.1" }
+            { "op": "replace", "path": "/version", "value": "1.0.1" }
           ]
         }
       }
@@ -76,17 +79,27 @@ If  we wish to generate the following Set:
 
     {
       "module-one": {
-        "version": "1.0.0",
-        "configMap": {
+        "module": {
+          "name": "module-one",
+          "version": "1.0.0"
+        }
+        "configmap": {
           "HELLO": "World!"
         }
       },
       "module-two": {
-        "version": "2.0.0",
-        "ingress": true,
-        "container_port": "8080"
-      }
-    }
+        "module": {
+          "name": "module-one",
+          "version": "2.0.0"
+        }
+        "ingress": {
+              "enabled": true
+            },
+            "container": {
+              "port": "8080"
+            }
+          }
+        }
 
 Our Delta would look as follows:
 
@@ -94,15 +107,25 @@ Our Delta would look as follows:
       "modules": {
         "add": {
           "module-one": {
-            "version": "1.0.0",
-            "configMap": {
+            "module": {
+              "name": "module-one",
+              "version": "1.0.0"
+            }
+            "configmap": {
               "HELLO": "World!"
             }
           },
           "module-two": {
-            "version": "2.0.0",
-            "ingress": true,
-            "container_port": "8080"
+            "module": {
+              "name": "module-one",
+              "version": "2.0.0"
+            }
+            "ingress": {
+              "enabled": true
+            },
+            "container": {
+              "port": "8080"
+            }
           }
         }
       }
@@ -112,6 +135,71 @@ It would be applied as follows:
 
     POST /orgs/my-org/apps/my-app/sets/0
 
-The _Empty Set_ always has an ID value of `0`.
+The _Empty Set_ always has an ID value of `0`. (Note, this can contain 1 or more zeros)
 
-### Generating a delta between 2 Sets
+### Complex Updates using Deltas
+
+The `update` action in a Delta is based on [jsonpatch](https://tools.ietf.org/html/rfc6902) This allows for arbitrary updates to be applied to arbitrary JSON. The `update` actions in Deltas support a subset of jsonpatch operations. Specifically:
+| Operation | Description |
+|--|--|
+| `add` | Adds a new property into an object or a new value into an array. (If the property exists, the value will be replaced. An index of `-` indicates insertion at the end of the array.) |
+| `remove` | Removes an existing property from an object or an existing value from an array. (If the property or index does not exist, nothing happens.) |
+| `replace` | Removes the value of an existing property in an object or an existing value at a specific index an array. If the property or index does not exist, this is an error. |
+
+The remaining operations of `copy`, `move` and `test` are not supported.
+
+#### Example 1: Adding updating properties in a sub object
+
+Start Set:
+
+    {
+      "module-one": {
+        "version": "1.0.0",
+        "configmap": {
+          "HELLO": "World!",
+          "UNWANTED_KEY": "Unwanted Value!",
+          "KEY": "Value"
+        }
+      }
+    }
+
+Target Set:
+
+    {
+      "module-one": {
+        "version": "1.0.0",
+        "configmap": {
+          "HELLO": "Alice!",
+          "NEW_KEY": "New Value!",
+          "KEY": "Value"
+        }
+      }
+    }
+
+Delta:
+
+    {
+      "modules" {
+        "module-one": {
+          "update": [
+            {"op": "add", "path": "/configmap/NEW_KEY", "value": "New Value!"},
+            {"op": "remove", "path": "/configmap/UNWANTED_KEY"},
+            {"op": "replace", "path": "/configmap/HELLO", "value": "Alice!"}
+          ]
+        }
+      }
+    }
+
+This approach allows for only making specific updates to a sub object. Notice how the `KEY` property and value remain untouched by the above delta.
+
+### Generating a Delta between 2 Sets
+
+Deltas can also describe the differences between two Sets.
+
+It would be applied as follows:
+
+To find the difference between set `A` and `B`, use the following:
+
+    POST /orgs/my-org/apps/my-app/sets/A?diff=B
+
+This will return the Delta that if applied to `B` would give `A`.

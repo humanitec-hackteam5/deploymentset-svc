@@ -5,8 +5,12 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"reflect"
 	"sort"
+	"strconv"
+
+	"humanitec.io/deploymentset-svc/pkg/jsonpointer"
 )
 
 // ErrNotSupported returned when an operation is not supported (e.g. in the UpdateAction.Operation)
@@ -15,10 +19,10 @@ var ErrNotSupported = errors.New("not supported")
 // ErrNotFound returned when a field required for Delta to be applied was missing.
 var ErrNotFound = errors.New("not found")
 
-func copyModuleSpec(ms ModuleSpec) ModuleSpec {
+func copyModuleSpec(ms map[string]interface{}) map[string]interface{} {
 	// for now we assume that all values are actially value type and not secretly maps or slices...
 	// Maybe we should use something like: https://gist.github.com/soroushjp/0ec92102641ddfc3ad5515ca76405f4d
-	out := make(ModuleSpec)
+	out := make(map[string]interface{})
 	for k := range ms {
 		out[k] = ms[k]
 	}
@@ -33,7 +37,7 @@ func (inputSet Set) Apply(delta Delta) (Set, error) {
 
 	// TODO: Check for conflicts.
 
-	set := Set{Modules: make(map[string]ModuleSpec)}
+	set := Set{Modules: make(map[string]map[string]interface{})}
 
 	removeModules := make(map[string]bool)
 	for _, name := range delta.Modules.Remove {
@@ -65,17 +69,89 @@ func (inputSet Set) Apply(delta Delta) (Set, error) {
 		}
 		// Note, that we already made a copy of the map in the "remove" section
 		for _, action := range values {
+			parent, key, err := jsonpointer.ExtractParent(set.Modules[name], action.Path)
+			if err != nil {
+				return Set{}, fmt.Errorf("path `%s` in module `%s`: %w", action.Path, name, err)
+			}
 
-			switch action.Operation {
-			case "add":
-				set.Modules[name][action.Path] = action.Value
-			case "remove":
-				delete(set.Modules[name], action.Path)
-			case "replace":
-				// Question: Do we need replace? Maybe this is just the same as an add in practice?
-				set.Modules[name][action.Path] = action.Value
-			default:
-				return Set{}, ErrNotSupported
+			if mapObj, ok := parent.(map[string]interface{}); ok {
+				switch action.Operation {
+				case "add":
+					mapObj[key] = action.Value
+
+				case "remove":
+					delete(mapObj, key)
+
+				case "replace":
+					if _, ok := mapObj[key]; ok {
+						mapObj[key] = action.Value
+					} else {
+						return Set{}, fmt.Errorf("path `%s` does not exist in module `%s`: %w", action.Path, name, ErrNotFound)
+					}
+
+				default:
+					return Set{}, ErrNotSupported
+				}
+			} else if slice, ok := parent.([]interface{}); ok {
+				// Becasue we need to manipulate the slice which might involve creating a new slice, we need the
+				// parent object of the slice.
+				parentOfParent, parentKey, _ := jsonpointer.ExtractParentOfParent(set.Modules[name], action.Path)
+				switch action.Operation {
+				case "add":
+					var target []interface{}
+					if key == "-" {
+						target = append(slice, action.Value)
+					} else {
+						if index, err := strconv.Atoi(key); err == nil {
+							if index < len(slice) {
+								target = append(slice[:index], append([]interface{}{action.Value}, slice[index:]...)...)
+							} else {
+								return Set{}, fmt.Errorf("index in path `%s` is out of range of the array in module `%s`: %w", action.Path, name, ErrNotFound)
+							}
+						} else {
+							return Set{}, fmt.Errorf("path `%s` refers to array and does not have a numerical index in module `%s`", action.Path, name)
+						}
+					}
+					if parentMapObj, ok := parentOfParent.(map[string]interface{}); ok {
+						parentMapObj[parentKey] = target
+					} else {
+						parentSlice := parentOfParent.([]interface{})
+						parentIndex, _ := strconv.Atoi(parentKey) // We know this works because it has worked in ExtractParent earlier
+						parentSlice[parentIndex] = target
+					}
+
+				case "remove":
+					if index, err := strconv.Atoi(key); err == nil {
+						if index < len(slice) {
+							if parentMapObj, ok := parentOfParent.(map[string]interface{}); ok {
+								parentMapObj[parentKey] = append(slice[:index], slice[index+1:]...)
+							} else {
+								parentSlice := parentOfParent.([]interface{})
+								parentIndex, _ := strconv.Atoi(parentKey) // We know this works because it has worked in ExtractParent earlier
+								parentSlice[parentIndex] = append(slice[:index], slice[index+1:]...)
+							}
+						} else {
+							return Set{}, fmt.Errorf("index in path `%s` is out of range of the array in module `%s`: %w", action.Path, name, ErrNotFound)
+						}
+					} else {
+						return Set{}, fmt.Errorf("path `%s` refers to array and does not have a numerical index in module `%s`", action.Path, name)
+					}
+				case "replace":
+					if index, err := strconv.Atoi(key); err == nil {
+						if index < len(slice) {
+							slice[index] = action.Value
+						} else {
+							return Set{}, fmt.Errorf("index in path `%s` is out of range of the array in module `%s`: %w", action.Path, name, ErrNotFound)
+						}
+					} else {
+						return Set{}, fmt.Errorf("path `%s` refers to array and does not have a numerical index in module `%s`", action.Path, name)
+					}
+
+				default:
+					return Set{}, ErrNotSupported
+				}
+			} else {
+				return Set{}, fmt.Errorf("parent of path `%s` in module `%s` must be an array or object to be updateable. got (%v)", action.Path, name, reflect.TypeOf(parent))
 			}
 		}
 	}
@@ -90,7 +166,7 @@ func max(a, b int) int {
 	return b
 }
 
-func moduleSpecDiff(left, right ModuleSpec) []UpdateAction {
+func ModuleSpecDiff(left, right map[string]interface{}) []UpdateAction {
 	updates := make([]UpdateAction, 0, max(len(left), len(right)))
 
 	for rightSpec := range right {
@@ -101,7 +177,7 @@ func moduleSpecDiff(left, right ModuleSpec) []UpdateAction {
 			if !reflect.DeepEqual(left[rightSpec], right[rightSpec]) {
 				updates = append(updates, UpdateAction{
 					Operation: "replace",
-					Path:      rightSpec,
+					Path:      "/" + rightSpec,
 					Value:     left[rightSpec],
 				})
 			}
@@ -109,7 +185,7 @@ func moduleSpecDiff(left, right ModuleSpec) []UpdateAction {
 			// 	only in right - should be removed
 			updates = append(updates, UpdateAction{
 				Operation: "remove",
-				Path:      rightSpec,
+				Path:      "/" + rightSpec,
 			})
 		}
 	}
@@ -120,7 +196,7 @@ func moduleSpecDiff(left, right ModuleSpec) []UpdateAction {
 			// config is only in right - add
 			updates = append(updates, UpdateAction{
 				Operation: "add",
-				Path:      leftSpec,
+				Path:      "/" + leftSpec,
 				Value:     left[leftSpec],
 			})
 		}
@@ -134,7 +210,7 @@ func (leftSet Set) Diff(rightSet Set) Delta {
 	delta := Delta{
 		Modules: ModuleDeltas{
 			Remove: make([]string, 0, max(len(leftSet.Modules), len(rightSet.Modules))),
-			Add:    make(map[string]ModuleSpec),
+			Add:    make(map[string]map[string]interface{}),
 			Update: make(map[string][]UpdateAction),
 		},
 	}
@@ -144,7 +220,7 @@ func (leftSet Set) Diff(rightSet Set) Delta {
 		_, exists := leftSet.Modules[rightModuleName]
 		if exists {
 			// Module is common to both
-			updates := moduleSpecDiff(leftSet.Modules[rightModuleName], rightSet.Modules[rightModuleName])
+			updates := ModuleSpecDiff(leftSet.Modules[rightModuleName], rightSet.Modules[rightModuleName])
 			if len(updates) > 0 {
 				delta.Modules.Update[rightModuleName] = updates
 			}
@@ -165,6 +241,23 @@ func (leftSet Set) Diff(rightSet Set) Delta {
 	return delta
 }
 
+/*
+// Combines an array of deltas into a single delta.
+// NOTE: Order matters. E.g. Update
+func MergeDeltas(deltas ...Delta) Delta {
+	var baseDelta Delta
+	for delta in range deltas {
+		// The basic algorithm is:
+		// 1. Merge removes into base
+		// 2. Check if any adds are in remove (if so, remove the remove)
+		// 3. Merge adds. (Note Add is the same as replace)
+		// 4. Check if updates are in remove - if so Fail
+		// 5. Add updates - check if value is the same - if so, then calculate result
+
+	}
+}
+*/
+
 func getMapKeysAsSortedSlice(m map[string]interface{}) []string {
 	a := make([]string, len(m))
 	i := 0
@@ -176,7 +269,7 @@ func getMapKeysAsSortedSlice(m map[string]interface{}) []string {
 	return a
 }
 
-func getModuleSpecKeysAsSortedSlice(m map[string]ModuleSpec) []string {
+func getModuleSpecKeysAsSortedSlice(m map[string]map[string]interface{}) []string {
 	a := make([]string, len(m))
 	i := 0
 	for k := range m {
@@ -187,7 +280,7 @@ func getModuleSpecKeysAsSortedSlice(m map[string]ModuleSpec) []string {
 	return a
 }
 
-func getModuleSpecAsSortedSlice(m ModuleSpec) [][2]interface{} {
+func getModuleSpecAsSortedSlice(m map[string]interface{}) [][2]interface{} {
 	sortedKeys := getMapKeysAsSortedSlice(m)
 
 	kvpArr := make([][2]interface{}, len(m))
@@ -197,7 +290,7 @@ func getModuleSpecAsSortedSlice(m ModuleSpec) [][2]interface{} {
 	return kvpArr
 }
 
-func getModulesAsSortedSlice(m map[string]ModuleSpec) [][2]interface{} {
+func getModulesAsSortedSlice(m map[string]map[string]interface{}) [][2]interface{} {
 	sortedModules := getModuleSpecKeysAsSortedSlice(m)
 
 	kvpArr := make([][2]interface{}, len(m))

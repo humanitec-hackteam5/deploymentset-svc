@@ -18,16 +18,16 @@ func TestApplyToEmptySet(t *testing.T) {
 	emptySet := Set{}
 	delta := Delta{
 		Modules: ModuleDeltas{
-			Add: map[string]ModuleSpec{
-				"test-module": ModuleSpec{
+			Add: map[string]map[string]interface{}{
+				"test-module": map[string]interface{}{
 					"version": "TEST_VERSION",
 				},
 			},
 		},
 	}
 	expectedSet := Set{
-		Modules: map[string]ModuleSpec{
-			"test-module": ModuleSpec{
+		Modules: map[string]map[string]interface{}{
+			"test-module": map[string]interface{}{
 				"version": "TEST_VERSION",
 			},
 		},
@@ -37,8 +37,8 @@ func TestApplyToEmptySet(t *testing.T) {
 
 func TestApplyRemoveSingleModule(t *testing.T) {
 	inputSet := Set{
-		Modules: map[string]ModuleSpec{
-			"test-module": ModuleSpec{
+		Modules: map[string]map[string]interface{}{
+			"test-module": map[string]interface{}{
 				"version": "TEST_VERSION",
 			},
 		},
@@ -50,17 +50,17 @@ func TestApplyRemoveSingleModule(t *testing.T) {
 			},
 		},
 	}
-	expectedSet := Set{Modules: make(map[string]ModuleSpec)}
+	expectedSet := Set{Modules: make(map[string]map[string]interface{})}
 	validateApply(inputSet, delta, expectedSet, t)
 }
 
 func TestApplyRemoveModule(t *testing.T) {
 	inputSet := Set{
-		Modules: map[string]ModuleSpec{
-			"test-module1": ModuleSpec{
+		Modules: map[string]map[string]interface{}{
+			"test-module1": map[string]interface{}{
 				"version": "TEST_VERSION",
 			},
-			"test-module2": ModuleSpec{
+			"test-module2": map[string]interface{}{
 				"version": "TEST_VERSION",
 			},
 		},
@@ -74,8 +74,8 @@ func TestApplyRemoveModule(t *testing.T) {
 	}
 
 	expectedSet := Set{
-		Modules: map[string]ModuleSpec{
-			"test-module2": ModuleSpec{
+		Modules: map[string]map[string]interface{}{
+			"test-module2": map[string]interface{}{
 				"version": "TEST_VERSION",
 			},
 		},
@@ -85,8 +85,8 @@ func TestApplyRemoveModule(t *testing.T) {
 
 func TestApplyUpdateModuleAddField(t *testing.T) {
 	inputSet := Set{
-		Modules: map[string]ModuleSpec{
-			"test-module": ModuleSpec{
+		Modules: map[string]map[string]interface{}{
+			"test-module": map[string]interface{}{
 				"version": "TEST_VERSION",
 			},
 		},
@@ -97,7 +97,7 @@ func TestApplyUpdateModuleAddField(t *testing.T) {
 				"test-module": []UpdateAction{
 					UpdateAction{
 						Operation: "add",
-						Path:      "NEW_FIELD",
+						Path:      "/NEW_FIELD",
 						Value:     "NEW_VALUE",
 					},
 				},
@@ -106,8 +106,8 @@ func TestApplyUpdateModuleAddField(t *testing.T) {
 	}
 
 	expectedSet := Set{
-		Modules: map[string]ModuleSpec{
-			"test-module": ModuleSpec{
+		Modules: map[string]map[string]interface{}{
+			"test-module": map[string]interface{}{
 				"version":   "TEST_VERSION",
 				"NEW_FIELD": "NEW_VALUE",
 			},
@@ -117,10 +117,192 @@ func TestApplyUpdateModuleAddField(t *testing.T) {
 	validateApply(inputSet, delta, expectedSet, t)
 }
 
+func TestApplyUpdateModuleManipulateSubObject(t *testing.T) {
+	inputSet := Set{
+		Modules: map[string]map[string]interface{}{
+			"test-module": map[string]interface{}{
+				"version": "TEST_VERSION",
+				"configmap": map[string]interface{}{
+					"HELLO":        "World!",
+					"UNWANTED_KEY": "Unwanted Value!",
+					"KEY":          "Value",
+				},
+			},
+		},
+	}
+	delta := Delta{
+		Modules: ModuleDeltas{
+			Update: map[string][]UpdateAction{
+				"test-module": []UpdateAction{
+					UpdateAction{
+						Operation: "add",
+						Path:      "/configmap/NEW_KEY",
+						Value:     "New Value!",
+					},
+					UpdateAction{
+						Operation: "remove",
+						Path:      "/configmap/UNWANTED_KEY",
+					},
+					UpdateAction{
+						Operation: "replace",
+						Path:      "/configmap/HELLO",
+						Value:     "Alice!",
+					},
+				},
+			},
+		},
+	}
+
+	expectedSet := Set{
+		Modules: map[string]map[string]interface{}{
+			"test-module": map[string]interface{}{
+				"version": "TEST_VERSION",
+				"configmap": map[string]interface{}{
+					"HELLO":   "Alice!",
+					"NEW_KEY": "New Value!",
+					"KEY":     "Value",
+				},
+			},
+		},
+	}
+
+	validateApply(inputSet, delta, expectedSet, t)
+}
+
+func TestApplyUpdateModuleManipulateArrayValues(t *testing.T) {
+	inputSet := Set{
+		Modules: map[string]map[string]interface{}{
+			"test-module": map[string]interface{}{
+				"version": "TEST_VERSION",
+				"array": []interface{}{
+					"value-one",
+					"value-two",
+					"value-three",
+					"value-four",
+					"value-five",
+				},
+			},
+		},
+	}
+	delta := Delta{
+		Modules: ModuleDeltas{
+			Update: map[string][]UpdateAction{
+				"test-module": []UpdateAction{
+					UpdateAction{
+						Operation: "replace",
+						Path:      "/array/1",
+						Value:     "NEW VALUE!",
+					},
+					UpdateAction{
+						Operation: "add",
+						Path:      "/array/-",
+						Value:     "LAST VALUE!",
+					},
+					UpdateAction{
+						Operation: "add",
+						Path:      "/array/3",
+						Value:     "INSERTED VALUE",
+					},
+					UpdateAction{
+						Operation: "remove",
+						Path:      "/array/4",
+					},
+				},
+			},
+		},
+	}
+
+	expectedSet := Set{
+		Modules: map[string]map[string]interface{}{
+			"test-module": map[string]interface{}{
+				"version": "TEST_VERSION",
+				"array": []interface{}{
+					"value-one",
+					"NEW VALUE!",
+					"value-three",
+					"INSERTED VALUE",
+					"value-five",
+					"LAST VALUE!",
+				},
+			},
+		},
+	}
+
+	validateApply(inputSet, delta, expectedSet, t)
+}
+
+func TestApplyUpdateModuleManipulateArrayValuesWithOuterArray(t *testing.T) {
+	inputSet := Set{
+		Modules: map[string]map[string]interface{}{
+			"test-module": map[string]interface{}{
+				"version": "TEST_VERSION",
+				"array": []interface{}{
+					"outer-value",
+					[]interface{}{
+						"value-one",
+						"value-two",
+						"value-three",
+						"value-four",
+						"value-five",
+					},
+				},
+			},
+		},
+	}
+	delta := Delta{
+		Modules: ModuleDeltas{
+			Update: map[string][]UpdateAction{
+				"test-module": []UpdateAction{
+					UpdateAction{
+						Operation: "replace",
+						Path:      "/array/1/1",
+						Value:     "NEW VALUE!",
+					},
+					UpdateAction{
+						Operation: "add",
+						Path:      "/array/1/-",
+						Value:     "LAST VALUE!",
+					},
+					UpdateAction{
+						Operation: "add",
+						Path:      "/array/1/3",
+						Value:     "INSERTED VALUE",
+					},
+					UpdateAction{
+						Operation: "remove",
+						Path:      "/array/1/4",
+					},
+				},
+			},
+		},
+	}
+
+	expectedSet := Set{
+		Modules: map[string]map[string]interface{}{
+			"test-module": map[string]interface{}{
+				"version": "TEST_VERSION",
+				"array": []interface{}{
+					"outer-value",
+					[]interface{}{
+						"value-one",
+						"NEW VALUE!",
+						"value-three",
+						"INSERTED VALUE",
+						"value-five",
+						"LAST VALUE!",
+					},
+				},
+			},
+		},
+	}
+
+	validateApply(inputSet, delta, expectedSet, t)
+}
+
 func TestApplyUpdateModuleRemoveField(t *testing.T) {
 	inputSet := Set{
-		Modules: map[string]ModuleSpec{
-			"test-module": ModuleSpec{
+		Modules: map[string]map[string]interface{}{
+			"test-module": map[string]interface{}{
 				"param01": "VALUE01",
 				"param02": "VALUE02",
 				"param03": "VALUE03",
@@ -133,7 +315,7 @@ func TestApplyUpdateModuleRemoveField(t *testing.T) {
 				"test-module": []UpdateAction{
 					UpdateAction{
 						Operation: "remove",
-						Path:      "param02",
+						Path:      "/param02",
 					},
 				},
 			},
@@ -141,8 +323,8 @@ func TestApplyUpdateModuleRemoveField(t *testing.T) {
 	}
 
 	expectedSet := Set{
-		Modules: map[string]ModuleSpec{
-			"test-module": ModuleSpec{
+		Modules: map[string]map[string]interface{}{
+			"test-module": map[string]interface{}{
 				"param01": "VALUE01",
 				"param03": "VALUE03",
 			},
@@ -154,8 +336,8 @@ func TestApplyUpdateModuleRemoveField(t *testing.T) {
 
 func TestApplyUpdateModuleReplaceField(t *testing.T) {
 	inputSet := Set{
-		Modules: map[string]ModuleSpec{
-			"test-module": ModuleSpec{
+		Modules: map[string]map[string]interface{}{
+			"test-module": map[string]interface{}{
 				"param01": "VALUE01",
 				"param02": "VALUE02",
 				"param03": "VALUE03",
@@ -168,7 +350,7 @@ func TestApplyUpdateModuleReplaceField(t *testing.T) {
 				"test-module": []UpdateAction{
 					UpdateAction{
 						Operation: "replace",
-						Path:      "param02",
+						Path:      "/param02",
 						Value:     "NEW_VALUE02",
 					},
 				},
@@ -177,8 +359,8 @@ func TestApplyUpdateModuleReplaceField(t *testing.T) {
 	}
 
 	expectedSet := Set{
-		Modules: map[string]ModuleSpec{
-			"test-module": ModuleSpec{
+		Modules: map[string]map[string]interface{}{
+			"test-module": map[string]interface{}{
 				"param01": "VALUE01",
 				"param02": "NEW_VALUE02",
 				"param03": "VALUE03",
@@ -191,8 +373,8 @@ func TestApplyUpdateModuleReplaceField(t *testing.T) {
 
 func TestApplyUpdateModuleNotFound(t *testing.T) {
 	inputSet := Set{
-		Modules: map[string]ModuleSpec{
-			"test-module": ModuleSpec{
+		Modules: map[string]map[string]interface{}{
+			"test-module": map[string]interface{}{
 				"param01": "VALUE01",
 				"param02": "VALUE02",
 				"param03": "VALUE03",
@@ -205,7 +387,7 @@ func TestApplyUpdateModuleNotFound(t *testing.T) {
 				"other-module": []UpdateAction{
 					UpdateAction{
 						Operation: "add",
-						Path:      "newParam04",
+						Path:      "/newParam04",
 						Value:     "NEW_VALUE04",
 					},
 				},
@@ -233,16 +415,16 @@ func validateDiff(left, right Set, expected Delta, t *testing.T) {
 func TestDiffToEmptySet(t *testing.T) {
 	emptySet := Set{}
 	left := Set{
-		Modules: map[string]ModuleSpec{
-			"test-module": ModuleSpec{
+		Modules: map[string]map[string]interface{}{
+			"test-module": map[string]interface{}{
 				"version": "TEST_VERSION",
 			},
 		},
 	}
 	expected := Delta{
 		Modules: ModuleDeltas{
-			Add: map[string]ModuleSpec{
-				"test-module": ModuleSpec{
+			Add: map[string]map[string]interface{}{
+				"test-module": map[string]interface{}{
 					"version": "TEST_VERSION",
 				},
 			},
@@ -256,15 +438,15 @@ func TestDiffToEmptySet(t *testing.T) {
 func TestDiffFromEmptySet(t *testing.T) {
 	emptySet := Set{}
 	right := Set{
-		Modules: map[string]ModuleSpec{
-			"test-module": ModuleSpec{
+		Modules: map[string]map[string]interface{}{
+			"test-module": map[string]interface{}{
 				"version": "TEST_VERSION",
 			},
 		},
 	}
 	expected := Delta{
 		Modules: ModuleDeltas{
-			Add:    map[string]ModuleSpec{},
+			Add:    map[string]map[string]interface{}{},
 			Remove: []string{"test-module"},
 			Update: map[string][]UpdateAction{},
 		},
@@ -274,11 +456,11 @@ func TestDiffFromEmptySet(t *testing.T) {
 
 func TestDiffAllChange(t *testing.T) {
 	left := Set{
-		Modules: map[string]ModuleSpec{
-			"only-left": ModuleSpec{
+		Modules: map[string]map[string]interface{}{
+			"only-left": map[string]interface{}{
 				"version": "TEST_VERSION_LEFT",
 			},
-			"in-both": ModuleSpec{
+			"in-both": map[string]interface{}{
 				"only-left":  "TEST_VERSION_LEFT",
 				"in-both-01": "LEFT_VALUE",
 				"in-both-02": "SAME_VALUE",
@@ -286,11 +468,11 @@ func TestDiffAllChange(t *testing.T) {
 		},
 	}
 	right := Set{
-		Modules: map[string]ModuleSpec{
-			"only-right": ModuleSpec{
+		Modules: map[string]map[string]interface{}{
+			"only-right": map[string]interface{}{
 				"version": "TEST_VERSION_RIGHT",
 			},
-			"in-both": ModuleSpec{
+			"in-both": map[string]interface{}{
 				"only-right": "TEST_VERSION_RIGHT",
 				"in-both-01": "RIGHT_VALUE",
 				"in-both-02": "SAME_VALUE",
@@ -299,17 +481,17 @@ func TestDiffAllChange(t *testing.T) {
 	}
 	expected := Delta{
 		Modules: ModuleDeltas{
-			Add: map[string]ModuleSpec{
-				"only-left": ModuleSpec{
+			Add: map[string]map[string]interface{}{
+				"only-left": map[string]interface{}{
 					"version": "TEST_VERSION_LEFT",
 				},
 			},
 			Remove: []string{"only-right"},
 			Update: map[string][]UpdateAction{
 				"in-both": []UpdateAction{
-					UpdateAction{Operation: "remove", Path: "only-right"},
-					UpdateAction{Operation: "replace", Path: "in-both-01", Value: "LEFT_VALUE"},
-					UpdateAction{Operation: "add", Path: "only-left", Value: "TEST_VERSION_LEFT"},
+					UpdateAction{Operation: "remove", Path: "/only-right"},
+					UpdateAction{Operation: "replace", Path: "/in-both-01", Value: "LEFT_VALUE"},
+					UpdateAction{Operation: "add", Path: "/only-left", Value: "TEST_VERSION_LEFT"},
 				},
 			},
 		},
@@ -334,14 +516,14 @@ func TestHashEmptgySetNil(t *testing.T) {
 // This test is mainly to ensure hashes do not change unexpectadly
 func TestHashGeneralCase(t *testing.T) {
 	inputSet := Set{
-		Modules: map[string]ModuleSpec{
-			"first-module": ModuleSpec{
+		Modules: map[string]map[string]interface{}{
+			"first-module": map[string]interface{}{
 				"StringParam": "Some string!",
 				"IntParam":    123,
 				"FloatParam":  125.5,
 				"BoolParam":   true,
 			},
-			"another-one": ModuleSpec{
+			"another-one": map[string]interface{}{
 				"version": "TEST_VERSION",
 				"param":   "TEST_param",
 			},

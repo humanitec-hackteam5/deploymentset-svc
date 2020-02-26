@@ -65,3 +65,32 @@ func TestExtract_InvalidPointer(t *testing.T) {
 	_, err := Extract(nil, "hello")
 	is.True(errors.Is(err, ErrInvalidPointer))
 }
+
+func TestExtractParent(t *testing.T) {
+	is := is.New(t)
+	jsonObj := `{
+  "array": [
+    "foo",
+    "bar",
+    "baz"
+  ],
+  "object": {
+    "foo": 0
+  }
+}`
+	var obj interface{}
+	err := json.Unmarshal(([]byte)(jsonObj), &obj)
+	is.NoErr(err)
+
+	doTest := func(pointer string, expectedJSON, expectedKey string) {
+		actualObj, actualKey, err := ExtractParent(obj, pointer)
+		is.NoErr(err)
+		actualJSON, _ := json.Marshal(actualObj)
+		is.Equal(expectedJSON, string(actualJSON))
+		is.Equal(expectedKey, string(actualKey))
+	}
+
+	doTest("/array/0", `["foo","bar","baz"]`, `0`)
+	doTest("/array/-", `["foo","bar","baz"]`, `-`)
+	doTest("/object/foo", `{"foo":0}`, `foo`)
+}

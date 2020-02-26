@@ -70,8 +70,8 @@ func TestGetDelta(t *testing.T) {
 		},
 		Content: depset.Delta{
 			Modules: depset.ModuleDeltas{
-				Add: map[string]depset.ModuleSpec{
-					"test-module": depset.ModuleSpec{
+				Add: map[string]map[string]interface{}{
+					"test-module": map[string]interface{}{
 						"version": "TEST_VERSION",
 					},
 				},
@@ -115,8 +115,8 @@ func TestGetAllDeltas(t *testing.T) {
 			},
 			Content: depset.Delta{
 				Modules: depset.ModuleDeltas{
-					Add: map[string]depset.ModuleSpec{
-						"test-module": depset.ModuleSpec{
+					Add: map[string]map[string]interface{}{
+						"test-module": map[string]interface{}{
 							"version": "TEST_VERSION",
 						},
 					},
@@ -132,8 +132,8 @@ func TestGetAllDeltas(t *testing.T) {
 			},
 			Content: depset.Delta{
 				Modules: depset.ModuleDeltas{
-					Add: map[string]depset.ModuleSpec{
-						"test-module": depset.ModuleSpec{
+					Add: map[string]map[string]interface{}{
+						"test-module": map[string]interface{}{
 							"version": "TEST_VERSION02",
 						},
 					},
@@ -197,8 +197,8 @@ func TestCreateDelta(t *testing.T) {
 	createdBy := "UNKNOWN"
 	userProvidedDelta := depset.Delta{
 		Modules: depset.ModuleDeltas{
-			Add: map[string]depset.ModuleSpec{
-				"test-module": depset.ModuleSpec{
+			Add: map[string]map[string]interface{}{
+				"test-module": map[string]interface{}{
 					"version": "TEST_VERSION",
 				},
 			},
@@ -245,8 +245,8 @@ func TestReplaceDelta(t *testing.T) {
 	updatedBy := "UNKNOWN"
 	previousDelta := depset.Delta{
 		Modules: depset.ModuleDeltas{
-			Add: map[string]depset.ModuleSpec{
-				"test-module": depset.ModuleSpec{
+			Add: map[string]map[string]interface{}{
+				"test-module": map[string]interface{}{
 					"version": "TEST_VERSION",
 				},
 			},
@@ -260,8 +260,8 @@ func TestReplaceDelta(t *testing.T) {
 	}
 	userProvidedDelta := depset.Delta{
 		Modules: depset.ModuleDeltas{
-			Add: map[string]depset.ModuleSpec{
-				"test-module": depset.ModuleSpec{
+			Add: map[string]map[string]interface{}{
+				"test-module": map[string]interface{}{
 					"version": "TEST_VERSION02",
 				},
 			},
@@ -314,8 +314,8 @@ func TestReplaceDelta_SameUser(t *testing.T) {
 	currentUser := "UNKNOWN"
 	previousDelta := depset.Delta{
 		Modules: depset.ModuleDeltas{
-			Add: map[string]depset.ModuleSpec{
-				"test-module": depset.ModuleSpec{
+			Add: map[string]map[string]interface{}{
+				"test-module": map[string]interface{}{
 					"version": "TEST_VERSION",
 				},
 			},
@@ -329,8 +329,8 @@ func TestReplaceDelta_SameUser(t *testing.T) {
 	}
 	userProvidedDelta := depset.Delta{
 		Modules: depset.ModuleDeltas{
-			Add: map[string]depset.ModuleSpec{
-				"test-module": depset.ModuleSpec{
+			Add: map[string]map[string]interface{}{
+				"test-module": map[string]interface{}{
 					"version": "TEST_VERSION02",
 				},
 			},
@@ -382,8 +382,8 @@ func TestReplaceDelta_DeltaDoesNotExist(t *testing.T) {
 
 	userProvidedDelta := depset.Delta{
 		Modules: depset.ModuleDeltas{
-			Add: map[string]depset.ModuleSpec{
-				"test-module": depset.ModuleSpec{
+			Add: map[string]map[string]interface{}{
+				"test-module": map[string]interface{}{
 					"version": "TEST_VERSION",
 				},
 			},

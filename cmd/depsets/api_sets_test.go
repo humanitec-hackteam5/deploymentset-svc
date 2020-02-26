@@ -76,8 +76,8 @@ func TestGetSet(t *testing.T) {
 			CreatedAt: time.Date(2020, time.January, 1, 1, 0, 0, 0, time.UTC),
 		},
 		Content: depset.Set{
-			Modules: map[string]depset.ModuleSpec{
-				"test-module": depset.ModuleSpec{
+			Modules: map[string]map[string]interface{}{
+				"test-module": map[string]interface{}{
 					"version": "TEST_VERSION",
 				},
 			},
@@ -116,8 +116,8 @@ func TestGetAllSets(t *testing.T) {
 				CreatedAt: time.Date(2020, time.January, 1, 1, 0, 0, 0, time.UTC),
 			},
 			Content: depset.Set{
-				Modules: map[string]depset.ModuleSpec{
-					"test-module": depset.ModuleSpec{
+				Modules: map[string]map[string]interface{}{
+					"test-module": map[string]interface{}{
 						"version": "TEST_VERSION",
 					},
 				},
@@ -128,8 +128,8 @@ func TestGetAllSets(t *testing.T) {
 				CreatedAt: time.Date(2020, time.January, 1, 2, 0, 0, 0, time.UTC),
 			},
 			Content: depset.Set{
-				Modules: map[string]depset.ModuleSpec{
-					"test-module2": depset.ModuleSpec{
+				Modules: map[string]map[string]interface{}{
+					"test-module2": map[string]interface{}{
 						"version": "TEST_VERSION2",
 					},
 				},
@@ -190,8 +190,8 @@ func TestApplyDelta(t *testing.T) {
 	appID := "test-app"
 	delta := depset.Delta{
 		Modules: depset.ModuleDeltas{
-			Add: map[string]depset.ModuleSpec{
-				"test-module02": depset.ModuleSpec{
+			Add: map[string]map[string]interface{}{
+				"test-module02": map[string]interface{}{
 					"version": "TEST_VERSION02",
 				},
 			},
@@ -199,19 +199,19 @@ func TestApplyDelta(t *testing.T) {
 	}
 	inputSetID := "27036a0c4ce1cda91addbd67ca65d499dfbeb9d0"
 	inputSet := depset.Set{
-		Modules: map[string]depset.ModuleSpec{
-			"test-module01": depset.ModuleSpec{
+		Modules: map[string]map[string]interface{}{
+			"test-module01": map[string]interface{}{
 				"version": "TEST_VERSION01",
 			},
 		},
 	}
 
 	expectedSet := depset.Set{
-		Modules: map[string]depset.ModuleSpec{
-			"test-module01": depset.ModuleSpec{
+		Modules: map[string]map[string]interface{}{
+			"test-module01": map[string]interface{}{
 				"version": "TEST_VERSION01",
 			},
-			"test-module02": depset.ModuleSpec{
+			"test-module02": map[string]interface{}{
 				"version": "TEST_VERSION02",
 			},
 		},
@@ -255,8 +255,8 @@ func TestApplyDelta_ToZeroSet(t *testing.T) {
 	appID := "test-app"
 	delta := depset.Delta{
 		Modules: depset.ModuleDeltas{
-			Add: map[string]depset.ModuleSpec{
-				"test-module01": depset.ModuleSpec{
+			Add: map[string]map[string]interface{}{
+				"test-module01": map[string]interface{}{
 					"version": "TEST_VERSION01",
 				},
 			},
@@ -265,8 +265,8 @@ func TestApplyDelta_ToZeroSet(t *testing.T) {
 	inputSetID := "0"
 
 	expectedSet := depset.Set{
-		Modules: map[string]depset.ModuleSpec{
-			"test-module01": depset.ModuleSpec{
+		Modules: map[string]map[string]interface{}{
+			"test-module01": map[string]interface{}{
 				"version": "TEST_VERSION01",
 			},
 		},
@@ -304,8 +304,8 @@ func TestApplyDelta_SetAlreadyExists(t *testing.T) {
 	appID := "test-app"
 	delta := depset.Delta{
 		Modules: depset.ModuleDeltas{
-			Add: map[string]depset.ModuleSpec{
-				"test-module01": depset.ModuleSpec{
+			Add: map[string]map[string]interface{}{
+				"test-module01": map[string]interface{}{
 					"version": "TEST_VERSION01",
 				},
 			},
@@ -314,8 +314,8 @@ func TestApplyDelta_SetAlreadyExists(t *testing.T) {
 	inputSetID := "0"
 
 	expectedSet := depset.Set{
-		Modules: map[string]depset.ModuleSpec{
-			"test-module01": depset.ModuleSpec{
+		Modules: map[string]map[string]interface{}{
+			"test-module01": map[string]interface{}{
 				"version": "TEST_VERSION01",
 			},
 		},
@@ -353,8 +353,8 @@ func TestApplyDelta_InputSetIdUnknown(t *testing.T) {
 	appID := "test-app"
 	delta := depset.Delta{
 		Modules: depset.ModuleDeltas{
-			Add: map[string]depset.ModuleSpec{
-				"test-module01": depset.ModuleSpec{
+			Add: map[string]map[string]interface{}{
+				"test-module01": map[string]interface{}{
 					"version": "TEST_VERSION01",
 				},
 			},
@@ -392,7 +392,7 @@ func TestApplyDelta_DeltaNotCompatibleToInputSet(t *testing.T) {
 				"test-module": []depset.UpdateAction{
 					depset.UpdateAction{
 						Operation: "replace",
-						Path:      "param",
+						Path:      "/param",
 						Value:     "NEW_VALUE",
 					},
 				},
@@ -401,8 +401,8 @@ func TestApplyDelta_DeltaNotCompatibleToInputSet(t *testing.T) {
 	}
 	inputSetID := "4efb2d1ae4f101a1ef4e0a08705910191868c5cc"
 	inputSet := depset.Set{
-		Modules: map[string]depset.ModuleSpec{
-			"other-module": depset.ModuleSpec{
+		Modules: map[string]map[string]interface{}{
+			"other-module": map[string]interface{}{
 				"other-param": "TEST_VERSION01",
 			},
 		},
@@ -435,8 +435,8 @@ func TestApplyDelta_EmptyDelta(t *testing.T) {
 	delta := depset.Delta{}
 	inputSetID := "27036a0c4ce1cda91addbd67ca65d499dfbeb9d0"
 	inputSet := depset.Set{
-		Modules: map[string]depset.ModuleSpec{
-			"test-module01": depset.ModuleSpec{
+		Modules: map[string]map[string]interface{}{
+			"test-module01": map[string]interface{}{
 				"version": "TEST_VERSION01",
 			},
 		},
@@ -501,16 +501,16 @@ func TestDiff_FromEmptySet(t *testing.T) {
 	appID := "test-app"
 	leftSetID := "4efb2d1ae4f101a1ef4e0a08705910191868c5cc"
 	leftSet := depset.Set{
-		Modules: map[string]depset.ModuleSpec{
-			"test-module": depset.ModuleSpec{
+		Modules: map[string]map[string]interface{}{
+			"test-module": map[string]interface{}{
 				"version": "TEST_VERSION",
 			},
 		},
 	}
 	expected := depset.Delta{
 		Modules: depset.ModuleDeltas{
-			Add: map[string]depset.ModuleSpec{
-				"test-module": depset.ModuleSpec{
+			Add: map[string]map[string]interface{}{
+				"test-module": map[string]interface{}{
 					"version": "TEST_VERSION",
 				},
 			},
