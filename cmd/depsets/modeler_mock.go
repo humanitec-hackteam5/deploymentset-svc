@@ -92,6 +92,21 @@ func (mr *MockmodelerMockRecorder) selectRawSet(orgID, appID, setID interface{})
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "selectRawSet", reflect.TypeOf((*Mockmodeler)(nil).selectRawSet), orgID, appID, setID)
 }
 
+// selectUnscopedRawSet mocks base method
+func (m *Mockmodeler) selectUnscopedRawSet(setID string) (depset.Set, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "selectUnscopedRawSet", setID)
+	ret0, _ := ret[0].(depset.Set)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// selectUnscopedRawSet indicates an expected call of selectUnscopedRawSet
+func (mr *MockmodelerMockRecorder) selectUnscopedRawSet(setID interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "selectUnscopedRawSet", reflect.TypeOf((*Mockmodeler)(nil).selectUnscopedRawSet), setID)
+}
+
 // selectAllDeltas mocks base method
 func (m *Mockmodeler) selectAllDeltas(orgID, appID string) ([]DeltaWrapper, error) {
 	m.ctrl.T.Helper()

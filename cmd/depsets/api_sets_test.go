@@ -101,6 +101,39 @@ func TestGetSet(t *testing.T) {
 
 }
 
+func TestGetUnscopedSet(t *testing.T) {
+	is := is.New(t)
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	m := NewMockmodeler(ctrl)
+
+	setID := "0123456789ABCDEFDEADBEEFDEADBEEFDEADBEEF"
+	expectedSet := depset.Set{
+		Modules: map[string]map[string]interface{}{
+			"test-module": map[string]interface{}{
+				"version": "TEST_VERSION",
+			},
+		},
+	}
+
+	m.
+		EXPECT().
+		selectUnscopedRawSet(setID).
+		Return(expectedSet, nil).
+		Times(1)
+
+	res := ExecuteRequest(m, "GET", fmt.Sprintf("/sets/%s", setID), nil, t)
+
+	is.Equal(res.Code, http.StatusOK) // Should return 200
+
+	var returnedSet depset.Set
+	json.Unmarshal(res.Body.Bytes(), &returnedSet)
+
+	is.Equal(returnedSet, expectedSet) // Returnned Set should match initilal set
+
+}
+
 func TestGetAllSets(t *testing.T) {
 	is := is.New(t)
 	ctrl := gomock.NewController(t)

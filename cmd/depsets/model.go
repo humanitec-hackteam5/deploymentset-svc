@@ -127,6 +127,21 @@ func (db model) selectSet(orgID string, appID string, setID string) (SetWrapper,
 	return sw, nil
 }
 
+// selectUnscopedRawSet fetches a particular set.
+// The ErrNotFound sential error is returned if the specific set could not be found.
+func (db model) selectUnscopedRawSet(setID string) (depset.Set, error) {
+	row := db.QueryRow(`SELECT content FROM sets WHERE id = $1`, setID)
+	var set depset.Set
+	err := row.Scan((*persistableSet)(&set))
+	if err == sql.ErrNoRows {
+		return depset.Set{}, ErrNotFound
+	} else if err != nil {
+		log.Printf("Database error fetching set with Id `%s`. (%v)", setID, err)
+		return depset.Set{}, fmt.Errorf("select set: %v", err)
+	}
+	return set, nil
+}
+
 // selectRawSet returns a depset.Set rather than SetWrapper version of a set.
 func (db model) selectRawSet(orgID string, appID string, setID string) (depset.Set, error) {
 	row := db.QueryRow(`SELECT content FROM sets WHERE org_id = $1 AND app_id = $2 AND id = $3`, orgID, appID, setID)

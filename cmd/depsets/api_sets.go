@@ -61,6 +61,27 @@ func (s *server) listSets() http.HandlerFunc {
 	}
 }
 
+// getUnscopedRawSet returns a handler which returns a specific set without checking org or app scope.
+//
+// The handler expects the set to be defined by a parameter "setId"
+func (s *server) getUnscopedRawSet() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		params := mux.Vars(r)
+		set, err := s.model.selectUnscopedRawSet(params["setId"])
+		if err != nil {
+			w.WriteHeader(500)
+			return
+		}
+
+		jsonSet, err := json.Marshal(set)
+		if err != nil {
+			log.Println(err)
+			w.WriteHeader(500)
+		}
+		w.Write(jsonSet)
+	}
+}
+
 // getSets returns a handler which returns a specific set in the specified app.
 //
 // The handler expects the organization to be defined by a parameter "orgId", the app by "appId" and the set by "setId"
