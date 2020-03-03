@@ -180,8 +180,8 @@ Delta:
 
     {
       "modules" {
-        "module-one": {
-          "update": [
+        "update": [
+          "module-one": {
             {"op": "add", "path": "/configmap/NEW_KEY", "value": "New Value!"},
             {"op": "remove", "path": "/configmap/UNWANTED_KEY"},
             {"op": "replace", "path": "/configmap/HELLO", "value": "Alice!"}
