@@ -1,9 +1,47 @@
 package depset
 
 import (
+	"log"
 	"reflect"
 	"testing"
 )
+
+func orderInvariantEqual(aIn, bIn interface{}) bool {
+	aType := reflect.ValueOf(aIn)
+	bType := reflect.ValueOf(bIn)
+	if aType.Kind() != reflect.Slice || bType.Kind() != reflect.Slice {
+		return false
+	}
+
+	if aType.Len() != bType.Len() {
+		log.Printf("%v != %v\n", aIn, bIn)
+		return false
+	}
+
+	matchA := make([]int, aType.Len())
+	matchB := make([]int, aType.Len())
+
+	for i := 0; i < aType.Len(); i++ {
+		for j := 0; j < aType.Len(); j++ {
+			// Count number of duplicates in a
+			if reflect.DeepEqual(aType.Index(i).Interface(), aType.Index(j).Interface()) {
+				matchA[i]++
+			}
+			// Count number of times a[i] matches in b
+			if reflect.DeepEqual(aType.Index(i).Interface(), bType.Index(j).Interface()) {
+				matchB[i]++
+			}
+		}
+	}
+
+	for i := range matchA {
+		if matchA[i] != matchB[i] {
+			return false
+		}
+	}
+
+	return true
+}
 
 func validateApply(inputSet Set, delta Delta, expectedSet Set, t *testing.T) {
 	generatedSet, err := inputSet.Apply(delta)
@@ -402,13 +440,34 @@ func TestApplyUpdateModuleNotFound(t *testing.T) {
 }
 
 func validateDiff(left, right Set, expected Delta, t *testing.T) {
-	generatedDelta := left.Diff(right)
+	validateDelta(left.Diff(right), expected, t)
+}
 
+func validateDelta(actual, expected Delta, t *testing.T) {
 	// NOTE, we are using reflect.DeepEqual here. There are a few gotchas:
 	// 1. it compares typed nils differently. e.g. nil != map[string]interface{}
-	// 2. it compares slice order strictly. In the case of deltas, slice order e.g. in Delta.Modules.Remove is arbitary
-	if !reflect.DeepEqual(generatedDelta, expected) {
-		t.Errorf("Expected: `%v`, got `%v`", expected, generatedDelta)
+
+	if !reflect.DeepEqual(actual.Modules.Add, expected.Modules.Add) {
+		t.Errorf("Expected: `%v`, got `%v`", actual, expected)
+		return
+	}
+	if !orderInvariantEqual(actual.Modules.Remove, expected.Modules.Remove) {
+		t.Errorf("Expected: `%v`, got `%v`", actual, expected)
+		return
+	}
+	if len(actual.Modules.Update) != len(expected.Modules.Update) {
+		t.Errorf("Expected: `%v`, got `%v`", actual, expected)
+		return
+	}
+	for module := range actual.Modules.Update {
+		if _, ok := expected.Modules.Update[module]; !ok {
+			t.Errorf("Expected: `%v`, got `%v`", actual, expected)
+			return
+		}
+		if !orderInvariantEqual(actual.Modules.Update[module], expected.Modules.Update[module]) {
+			t.Errorf("Expected: `%v`, got `%v`", actual, expected)
+			return
+		}
 	}
 }
 
@@ -499,6 +558,232 @@ func TestDiffAllChange(t *testing.T) {
 	validateDiff(left, right, expected, t)
 }
 
+func TestMargeDeltas(t *testing.T) {
+	deltaA := Delta{
+		Modules: ModuleDeltas{
+			Add: map[string]map[string]interface{}{
+				"module-add-a": map[string]interface{}{
+					"version": "VERSION_LEFT_MODULE_ADD_A",
+				},
+			},
+			Remove: []string{"module-remove-a"},
+			Update: map[string][]UpdateAction{
+				"module-update-a": []UpdateAction{
+					UpdateAction{Operation: "remove", Path: "/module-a/remove"},
+					UpdateAction{Operation: "replace", Path: "/module-a/replace", Value: "MODULE_A_REPLACE"},
+					UpdateAction{Operation: "add", Path: "/module-a/add", Value: "MODULE_A_ADD"},
+				},
+			},
+		},
+	}
+	deltaB := Delta{
+		Modules: ModuleDeltas{
+			Add: map[string]map[string]interface{}{
+				"module-add-b": map[string]interface{}{
+					"version": "VERSION_LEFT_MODULE_ADD_B",
+				},
+			},
+			Remove: []string{"module-add-a"},
+			Update: map[string][]UpdateAction{
+				"module-update-a": []UpdateAction{
+					UpdateAction{Operation: "remove", Path: "/module-b/remove"},
+					UpdateAction{Operation: "replace", Path: "/module-b/replace", Value: "MODULE_B_REPLACE"},
+					UpdateAction{Operation: "add", Path: "/module-b/add", Value: "MODULE_B_ADD"},
+				},
+			},
+		},
+	}
+	expectedDelta := Delta{
+		Modules: ModuleDeltas{
+			Add: map[string]map[string]interface{}{
+				"module-add-b": map[string]interface{}{
+					"version": "VERSION_LEFT_MODULE_ADD_B",
+				},
+			},
+			Remove: []string{"module-remove-a", "module-add-a"},
+			Update: map[string][]UpdateAction{
+				"module-update-a": []UpdateAction{
+					UpdateAction{Operation: "remove", Path: "/module-a/remove"},
+					UpdateAction{Operation: "replace", Path: "/module-a/replace", Value: "MODULE_A_REPLACE"},
+					UpdateAction{Operation: "add", Path: "/module-a/add", Value: "MODULE_A_ADD"},
+					UpdateAction{Operation: "remove", Path: "/module-b/remove"},
+					UpdateAction{Operation: "replace", Path: "/module-b/replace", Value: "MODULE_B_REPLACE"},
+					UpdateAction{Operation: "add", Path: "/module-b/add", Value: "MODULE_B_ADD"},
+				},
+			},
+		},
+	}
+	mergedDelta, err := MergeDeltas(deltaA, deltaB)
+	if err != nil {
+		t.Errorf("MergeDeltas returned unexpected error: %v", err)
+	}
+	validateDelta(mergedDelta, expectedDelta, t)
+}
+
+func TestMargeDeltas_UpdatesUpdatePreviouslyAdded(t *testing.T) {
+	deltaA := Delta{
+		Modules: ModuleDeltas{
+			Add: map[string]map[string]interface{}{
+				"module-add-a": map[string]interface{}{
+					"property01": "VALUE_01",
+					"property02": "VALUE_02",
+				},
+			},
+		},
+	}
+	deltaB := Delta{
+		Modules: ModuleDeltas{
+			Update: map[string][]UpdateAction{
+				"module-add-a": []UpdateAction{
+					UpdateAction{Operation: "remove", Path: "/property01"},
+					UpdateAction{Operation: "replace", Path: "/property02", Value: "REPLACED_VALUE"},
+					UpdateAction{Operation: "add", Path: "/newProperty", Value: "NEW_VALUE"},
+				},
+			},
+		},
+	}
+	expectedDelta := Delta{
+		Modules: ModuleDeltas{
+			Add: map[string]map[string]interface{}{
+				"module-add-a": map[string]interface{}{
+					"property02":  "REPLACED_VALUE",
+					"newProperty": "NEW_VALUE",
+				},
+			},
+		},
+	}
+	mergedDelta, err := MergeDeltas(deltaA, deltaB)
+	if err != nil {
+		t.Errorf("MergeDeltas returned unexpected error: %v", err)
+	}
+	validateDelta(mergedDelta, expectedDelta, t)
+}
+func TestMargeDeltas_UpdatesAdded(t *testing.T) {
+	deltaA := Delta{
+		Modules: ModuleDeltas{
+			Add: map[string]map[string]interface{}{
+				"module-add-a": map[string]interface{}{
+					"property01": "VALUE_01",
+					"property02": "VALUE_02",
+				},
+			},
+		},
+	}
+	deltaB := Delta{
+		Modules: ModuleDeltas{
+			Update: map[string][]UpdateAction{
+				"module-add-b": []UpdateAction{
+					UpdateAction{Operation: "remove", Path: "/property01"},
+					UpdateAction{Operation: "replace", Path: "/property02", Value: "REPLACED_VALUE"},
+					UpdateAction{Operation: "add", Path: "/newProperty", Value: "NEW_VALUE"},
+				},
+			},
+		},
+	}
+	expectedDelta := Delta{
+		Modules: ModuleDeltas{
+			Add: map[string]map[string]interface{}{
+				"module-add-a": map[string]interface{}{
+					"property01": "VALUE_01",
+					"property02": "VALUE_02",
+				},
+			},
+			Update: map[string][]UpdateAction{
+				"module-add-b": []UpdateAction{
+					UpdateAction{Operation: "remove", Path: "/property01"},
+					UpdateAction{Operation: "replace", Path: "/property02", Value: "REPLACED_VALUE"},
+					UpdateAction{Operation: "add", Path: "/newProperty", Value: "NEW_VALUE"},
+				},
+			},
+		},
+	}
+	mergedDelta, err := MergeDeltas(deltaA, deltaB)
+	if err != nil {
+		t.Errorf("MergeDeltas returned unexpected error: %v", err)
+	}
+	validateDelta(mergedDelta, expectedDelta, t)
+}
+
+func TestMargeDeltas_DuplicateRemovesAddOverride(t *testing.T) {
+	deltaA := Delta{
+		Modules: ModuleDeltas{
+			Add: map[string]map[string]interface{}{
+				"module-add-a": map[string]interface{}{
+					"version": "VERSION_LEFT_MODULE_ADD_A",
+				},
+			},
+			Remove: []string{"module-remove-a"},
+			Update: map[string][]UpdateAction{},
+		},
+	}
+	deltaB := Delta{
+		Modules: ModuleDeltas{
+			Add: map[string]map[string]interface{}{
+				"module-add-a": map[string]interface{}{
+					"version": "VERSION_LEFT_MODULE_ADD_B",
+				},
+			},
+			Remove: []string{"module-remove-a"},
+			Update: map[string][]UpdateAction{},
+		},
+	}
+	expectedDelta := Delta{
+		Modules: ModuleDeltas{
+			Add: map[string]map[string]interface{}{
+				"module-add-a": map[string]interface{}{
+					"version": "VERSION_LEFT_MODULE_ADD_B",
+				},
+			},
+			Remove: []string{"module-remove-a"},
+			Update: map[string][]UpdateAction{},
+		},
+	}
+	mergedDelta, err := MergeDeltas(deltaA, deltaB)
+	if err != nil {
+		t.Errorf("MergeDeltas returned unexpected error: %v", err)
+	}
+	validateDelta(mergedDelta, expectedDelta, t)
+}
+
+func TestMargeDeltas_RemoveRemove(t *testing.T) {
+	deltaA := Delta{
+		Modules: ModuleDeltas{
+			Add: map[string]map[string]interface{}{
+				"module-add-a": map[string]interface{}{
+					"version": "VERSION_LEFT_MODULE_ADD_A",
+				},
+			},
+			Remove: []string{"module-remove-to-remove", "module-remove-a"},
+			Update: map[string][]UpdateAction{},
+		},
+	}
+	deltaB := Delta{
+		Modules: ModuleDeltas{
+			Add: map[string]map[string]interface{}{
+				"module-remove-to-remove": nil,
+			},
+			Remove: []string{},
+			Update: map[string][]UpdateAction{},
+		},
+	}
+	expectedDelta := Delta{
+		Modules: ModuleDeltas{
+			Add: map[string]map[string]interface{}{
+				"module-add-a": map[string]interface{}{
+					"version": "VERSION_LEFT_MODULE_ADD_A",
+				},
+			},
+			Remove: []string{"module-remove-a"},
+			Update: map[string][]UpdateAction{},
+		},
+	}
+	mergedDelta, err := MergeDeltas(deltaA, deltaB)
+	if err != nil {
+		t.Errorf("MergeDeltas returned unexpected error: %v", err)
+	}
+	validateDelta(mergedDelta, expectedDelta, t)
+}
+
 func validateHash(inputSet Set, expected string, t *testing.T) {
 	actual := inputSet.Hash()
 	if expected != actual {
@@ -529,7 +814,7 @@ func TestHashGeneralCase(t *testing.T) {
 			},
 		},
 	}
-	expectedHash := "312e7b1e28608235579bbb0fb5ad6e9d3cf38a7f"
+	expectedHash := "b9fe8e88cfee30dff184e3bd8985421942db2e54233ea736cbac07c9fcba7814"
 
 	validateHash(inputSet, expectedHash, t)
 }

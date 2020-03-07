@@ -1,7 +1,7 @@
 package depset
 
 import (
-	"crypto/sha1"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -19,6 +19,9 @@ var ErrNotSupported = errors.New("not supported")
 // ErrNotFound returned when a field required for Delta to be applied was missing.
 var ErrNotFound = errors.New("not found")
 
+// ErrTypeMismatch returned when the type of an object is not what was expected.
+var ErrTypeMismatch = errors.New("type mismatch")
+
 func copyModuleSpec(ms map[string]interface{}) map[string]interface{} {
 	// for now we assume that all values are actially value type and not secretly maps or slices...
 	// Maybe we should use something like: https://gist.github.com/soroushjp/0ec92102641ddfc3ad5515ca76405f4d
@@ -29,6 +32,97 @@ func copyModuleSpec(ms map[string]interface{}) map[string]interface{} {
 	return out
 }
 
+// applyUpdateAction applies a JSON-PATCH (https://tools.ietf.org/html/rfc6902) action to a structure derrived from a
+// JSON object.
+// The update happens in place. If an error is thrown, the state of object is undefined.
+func applyUpdateAction(action UpdateAction, object map[string]interface{}) error {
+	parent, key, err := jsonpointer.ExtractParent(object, action.Path)
+	if err != nil {
+		return fmt.Errorf("path `%s`: %w", action.Path, err)
+	}
+
+	if mapObj, ok := parent.(map[string]interface{}); ok {
+		switch action.Operation {
+		case "add":
+			mapObj[key] = action.Value
+
+		case "remove":
+			delete(mapObj, key)
+
+		case "replace":
+			if _, ok := mapObj[key]; ok {
+				mapObj[key] = action.Value
+			} else {
+				return fmt.Errorf("path `%s` does not exist: %w", action.Path, ErrNotFound)
+			}
+
+		default:
+			return ErrNotSupported
+		}
+	} else if slice, ok := parent.([]interface{}); ok {
+		// Becasue we need to manipulate the slice which might involve creating a new slice, we need the
+		// parent object of the slice.
+		parentOfParent, parentKey, _ := jsonpointer.ExtractParentOfParent(object, action.Path)
+		switch action.Operation {
+		case "add":
+			var target []interface{}
+			if key == "-" {
+				target = append(slice, action.Value)
+			} else {
+				if index, err := strconv.Atoi(key); err == nil {
+					if index < len(slice) {
+						target = append(slice[:index], append([]interface{}{action.Value}, slice[index:]...)...)
+					} else {
+						return fmt.Errorf("index in path `%s` out of range: %w", action.Path, ErrNotFound)
+					}
+				} else {
+					return fmt.Errorf("path `%s` refers to array and does not have a numerical index: %w", action.Path, ErrTypeMismatch)
+				}
+			}
+			if parentMapObj, ok := parentOfParent.(map[string]interface{}); ok {
+				parentMapObj[parentKey] = target
+			} else {
+				parentSlice := parentOfParent.([]interface{})
+				parentIndex, _ := strconv.Atoi(parentKey) // We know this works because it has worked in ExtractParent earlier
+				parentSlice[parentIndex] = target
+			}
+
+		case "remove":
+			if index, err := strconv.Atoi(key); err == nil {
+				if index < len(slice) {
+					if parentMapObj, ok := parentOfParent.(map[string]interface{}); ok {
+						parentMapObj[parentKey] = append(slice[:index], slice[index+1:]...)
+					} else {
+						parentSlice := parentOfParent.([]interface{})
+						parentIndex, _ := strconv.Atoi(parentKey) // We know this works because it has worked in ExtractParent earlier
+						parentSlice[parentIndex] = append(slice[:index], slice[index+1:]...)
+					}
+				} else {
+					return fmt.Errorf("index in path `%s` out of range: %w", action.Path, ErrNotFound)
+				}
+			} else {
+				return fmt.Errorf("path `%s` refers to array and does not have a numerical index: %w", action.Path, ErrTypeMismatch)
+			}
+		case "replace":
+			if index, err := strconv.Atoi(key); err == nil {
+				if index < len(slice) {
+					slice[index] = action.Value
+				} else {
+					return fmt.Errorf("index in path `%s` out of range: %w", action.Path, ErrNotFound)
+				}
+			} else {
+				return fmt.Errorf("path `%s` refers to array and does not have a numerical index: %w", action.Path, ErrTypeMismatch)
+			}
+
+		default:
+			return ErrNotSupported
+		}
+	} else {
+		return fmt.Errorf("parent of path `%s` must be an array or object to be updateable. got (%v): %w", action.Path, reflect.TypeOf(parent), ErrTypeMismatch)
+	}
+	return nil
+}
+
 // Apply generates a new Deployment Set from an existsing set by applying a Deployment Delta.
 func (inputSet Set) Apply(delta Delta) (Set, error) {
 	// Note: The Set structure makes a lot of use of map
@@ -37,7 +131,10 @@ func (inputSet Set) Apply(delta Delta) (Set, error) {
 
 	// TODO: Check for conflicts.
 
-	set := Set{Modules: make(map[string]map[string]interface{})}
+	set := Set{
+		Modules: make(map[string]map[string]interface{}),
+		Version: 0,
+	}
 
 	removeModules := make(map[string]bool)
 	for _, name := range delta.Modules.Remove {
@@ -69,89 +166,9 @@ func (inputSet Set) Apply(delta Delta) (Set, error) {
 		}
 		// Note, that we already made a copy of the map in the "remove" section
 		for _, action := range values {
-			parent, key, err := jsonpointer.ExtractParent(set.Modules[name], action.Path)
+			err := applyUpdateAction(action, set.Modules[name])
 			if err != nil {
-				return Set{}, fmt.Errorf("path `%s` in module `%s`: %w", action.Path, name, err)
-			}
-
-			if mapObj, ok := parent.(map[string]interface{}); ok {
-				switch action.Operation {
-				case "add":
-					mapObj[key] = action.Value
-
-				case "remove":
-					delete(mapObj, key)
-
-				case "replace":
-					if _, ok := mapObj[key]; ok {
-						mapObj[key] = action.Value
-					} else {
-						return Set{}, fmt.Errorf("path `%s` does not exist in module `%s`: %w", action.Path, name, ErrNotFound)
-					}
-
-				default:
-					return Set{}, ErrNotSupported
-				}
-			} else if slice, ok := parent.([]interface{}); ok {
-				// Becasue we need to manipulate the slice which might involve creating a new slice, we need the
-				// parent object of the slice.
-				parentOfParent, parentKey, _ := jsonpointer.ExtractParentOfParent(set.Modules[name], action.Path)
-				switch action.Operation {
-				case "add":
-					var target []interface{}
-					if key == "-" {
-						target = append(slice, action.Value)
-					} else {
-						if index, err := strconv.Atoi(key); err == nil {
-							if index < len(slice) {
-								target = append(slice[:index], append([]interface{}{action.Value}, slice[index:]...)...)
-							} else {
-								return Set{}, fmt.Errorf("index in path `%s` is out of range of the array in module `%s`: %w", action.Path, name, ErrNotFound)
-							}
-						} else {
-							return Set{}, fmt.Errorf("path `%s` refers to array and does not have a numerical index in module `%s`", action.Path, name)
-						}
-					}
-					if parentMapObj, ok := parentOfParent.(map[string]interface{}); ok {
-						parentMapObj[parentKey] = target
-					} else {
-						parentSlice := parentOfParent.([]interface{})
-						parentIndex, _ := strconv.Atoi(parentKey) // We know this works because it has worked in ExtractParent earlier
-						parentSlice[parentIndex] = target
-					}
-
-				case "remove":
-					if index, err := strconv.Atoi(key); err == nil {
-						if index < len(slice) {
-							if parentMapObj, ok := parentOfParent.(map[string]interface{}); ok {
-								parentMapObj[parentKey] = append(slice[:index], slice[index+1:]...)
-							} else {
-								parentSlice := parentOfParent.([]interface{})
-								parentIndex, _ := strconv.Atoi(parentKey) // We know this works because it has worked in ExtractParent earlier
-								parentSlice[parentIndex] = append(slice[:index], slice[index+1:]...)
-							}
-						} else {
-							return Set{}, fmt.Errorf("index in path `%s` is out of range of the array in module `%s`: %w", action.Path, name, ErrNotFound)
-						}
-					} else {
-						return Set{}, fmt.Errorf("path `%s` refers to array and does not have a numerical index in module `%s`", action.Path, name)
-					}
-				case "replace":
-					if index, err := strconv.Atoi(key); err == nil {
-						if index < len(slice) {
-							slice[index] = action.Value
-						} else {
-							return Set{}, fmt.Errorf("index in path `%s` is out of range of the array in module `%s`: %w", action.Path, name, ErrNotFound)
-						}
-					} else {
-						return Set{}, fmt.Errorf("path `%s` refers to array and does not have a numerical index in module `%s`", action.Path, name)
-					}
-
-				default:
-					return Set{}, ErrNotSupported
-				}
-			} else {
-				return Set{}, fmt.Errorf("parent of path `%s` in module `%s` must be an array or object to be updateable. got (%v)", action.Path, name, reflect.TypeOf(parent))
+				return Set{}, fmt.Errorf("module %s: %w", name, err)
 			}
 		}
 	}
@@ -241,22 +258,86 @@ func (leftSet Set) Diff(rightSet Set) Delta {
 	return delta
 }
 
-/*
-// Combines an array of deltas into a single delta.
-// NOTE: Order matters. E.g. Update
-func MergeDeltas(deltas ...Delta) Delta {
-	var baseDelta Delta
-	for delta in range deltas {
-		// The basic algorithm is:
-		// 1. Merge removes into base
-		// 2. Check if any adds are in remove (if so, remove the remove)
-		// 3. Merge adds. (Note Add is the same as replace)
-		// 4. Check if updates are in remove - if so Fail
-		// 5. Add updates - check if value is the same - if so, then calculate result
-
+func removeDuplicates(a []string) []string {
+	buf := make(map[string]int)
+	b := make([]string, 0, len(buf))
+	for i := range a {
+		buf[a[i]] = buf[a[i]] + 1
 	}
+
+	for i := range a {
+		buf[a[i]]--
+		if 0 == buf[a[i]] {
+			b = append(b, a[i])
+		}
+	}
+	return b
 }
-*/
+
+func removeFromList(a []string, value string) []string {
+	b := make([]string, 0, len(a))
+	for i := range a {
+		if a[i] != value {
+			b = append(b, a[i])
+		}
+	}
+	return b
+}
+
+// MergeDeltas combines an array of deltas into a single delta.
+// NOTE: Order matters. E.g. Update
+// NOTE: This implementation updates baseDelta in place...
+func MergeDeltas(baseDelta Delta, deltas ...Delta) (Delta, error) {
+	// Sanitize Input, maps should not be nil:
+	if nil == baseDelta.Modules.Add {
+		baseDelta.Modules.Add = make(map[string]map[string]interface{})
+	}
+	if nil == baseDelta.Modules.Update {
+		baseDelta.Modules.Update = make(map[string][]UpdateAction)
+	}
+
+	for deltaIndex, delta := range deltas {
+		for _, removeModuleName := range delta.Modules.Remove {
+			delete(baseDelta.Modules.Add, removeModuleName)
+			delete(baseDelta.Modules.Update, removeModuleName)
+		}
+		baseDelta.Modules.Remove = removeDuplicates(append(baseDelta.Modules.Remove, delta.Modules.Remove...))
+
+		for addModuleName, addModule := range delta.Modules.Add {
+			if nil == delta.Modules.Add[addModuleName] {
+				baseDelta.Modules.Remove = removeFromList(baseDelta.Modules.Remove, addModuleName)
+			} else {
+				// Override an existing add for the module, or create a new one
+				baseDelta.Modules.Add[addModuleName] = addModule
+
+				// Override any existing updates for the module
+				delete(baseDelta.Modules.Update, addModuleName)
+			}
+		}
+
+		for updateModuleName, moduleUpdates := range delta.Modules.Update {
+			if addModule, ok := baseDelta.Modules.Add[updateModuleName]; ok {
+				// The module has been added previously. Rather than appending the updates,
+				// we can update the original add.
+				for _, action := range moduleUpdates {
+					err := applyUpdateAction(action, addModule)
+					if err != nil {
+						return Delta{}, fmt.Errorf("updates in module `%s` for delta at index %d not compatible with added module: %w", updateModuleName, deltaIndex, err)
+					}
+				}
+			} else {
+				// for now, just append.
+				// In future we can combine updates into the smallest set of update statements...
+				if _, ok := baseDelta.Modules.Update[updateModuleName]; !ok {
+					baseDelta.Modules.Update[updateModuleName] = moduleUpdates
+				} else {
+					baseDelta.Modules.Update[updateModuleName] = append(baseDelta.Modules.Update[updateModuleName], moduleUpdates...)
+				}
+			}
+		}
+	}
+	return baseDelta, nil
+}
 
 func getMapKeysAsSortedSlice(m map[string]interface{}) []string {
 	a := make([]string, len(m))
@@ -313,6 +394,6 @@ func (inputSet Set) Hash() string {
 	arrSet := [2]interface{}{"modules", getModulesAsSortedSlice(inputSet.Modules)}
 
 	buf, _ := json.Marshal(arrSet)
-	checksum := sha1.Sum(buf)
+	checksum := sha256.Sum256(buf)
 	return hex.EncodeToString(checksum[:])
 }

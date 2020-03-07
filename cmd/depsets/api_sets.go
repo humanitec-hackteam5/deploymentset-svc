@@ -98,6 +98,7 @@ func (s *server) getSet() http.HandlerFunc {
 		if err != nil {
 			log.Println(err)
 			w.WriteHeader(500)
+			return
 		}
 		w.Write(jsonSet)
 	}
@@ -149,6 +150,7 @@ func (s *server) diffSets() http.HandlerFunc {
 		if err != nil {
 			log.Println(err)
 			w.WriteHeader(500)
+			return
 		}
 		w.WriteHeader(200)
 		w.Write(jsonDelta)

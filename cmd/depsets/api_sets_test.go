@@ -61,6 +61,17 @@ func ExecuteRequest(m modeler, method, url string, body *bytes.Buffer, t *testin
 	return w
 }
 
+func TestSetForEmptyInputs(t *testing.T) {
+	is := is.New(t)
+	res := ExecuteRequest(nil, "POST", "/orgs/test-org/apps/test-app/sets/test-set", nil, t)
+	is.Equal(res.Code, http.StatusUnprocessableEntity) // Should return 422
+}
+func TestSetForMalformedInputs(t *testing.T) {
+	is := is.New(t)
+	res := ExecuteRequest(nil, "POST", "/orgs/test-org/apps/test-app/sets/test-set", bytes.NewBuffer([]byte(`THIS IS NOT VALID JSON!`)), t)
+	is.Equal(res.Code, http.StatusUnprocessableEntity) // Should return 422
+}
+
 func TestGetSet(t *testing.T) {
 	is := is.New(t)
 	ctrl := gomock.NewController(t)

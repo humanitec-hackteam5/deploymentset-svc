@@ -47,8 +47,34 @@ func (m *matchingDeltaMetadata) Matches(x interface{}) bool {
 	if !ok {
 		return false
 	}
+
 	return orderInvarientEqual(m.m.Contributers, metadataToTest.Contributers) &&
 		m.m.CreatedBy == metadataToTest.CreatedBy
+}
+
+func TestDeltaForEmptyInputs(t *testing.T) {
+	is := is.New(t)
+	res := ExecuteRequest(nil, "POST", "/orgs/test-org/apps/test-app/deltas", nil, t)
+	is.Equal(res.Code, http.StatusUnprocessableEntity) // Should return 422: POST /orgs/test-org/apps/test-app/deltas
+
+	res = ExecuteRequest(nil, "PUT", "/orgs/test-org/apps/test-app/deltas/DELTAID", nil, t)
+	is.Equal(res.Code, http.StatusUnprocessableEntity) // Should return 422: PUT /orgs/test-org/apps/test-app/deltas/DELTAID
+
+	res = ExecuteRequest(nil, "PATCH", "/orgs/test-org/apps/test-app/deltas/DELTAID", nil, t)
+	is.Equal(res.Code, http.StatusUnprocessableEntity) // Should return 422: PATCH /orgs/test-org/apps/test-app/deltas/DELTAID
+}
+
+func TestDeltaForMalformedInputs(t *testing.T) {
+	is := is.New(t)
+	invalidJSON := bytes.NewBuffer([]byte(`THIS IS NOT VALID JSON!`))
+	res := ExecuteRequest(nil, "POST", "/orgs/test-org/apps/test-app/deltas", invalidJSON, t)
+	is.Equal(res.Code, http.StatusUnprocessableEntity) // Should return 422: POST /orgs/test-org/apps/test-app/deltas
+
+	res = ExecuteRequest(nil, "PUT", "/orgs/test-org/apps/test-app/deltas/DELTAID", invalidJSON, t)
+	is.Equal(res.Code, http.StatusUnprocessableEntity) // Should return 422: PUT /orgs/test-org/apps/test-app/deltas/DELTAID
+
+	res = ExecuteRequest(nil, "PATCH", "/orgs/test-org/apps/test-app/deltas/DELTAID", invalidJSON, t)
+	is.Equal(res.Code, http.StatusUnprocessableEntity) // Should return 422: PATCH /orgs/test-org/apps/test-app/deltas/DELTAID}
 }
 
 func TestGetDelta(t *testing.T) {
@@ -403,5 +429,135 @@ func TestReplaceDelta_DeltaDoesNotExist(t *testing.T) {
 	res := ExecuteRequest(m, "PUT", fmt.Sprintf("/orgs/%s/apps/%s/deltas/%s", orgID, appID, deltaID), body, t)
 
 	is.Equal(res.Code, http.StatusNotFound) // Should return 404
+
+}
+
+func TestUpdateDelta_DeltaDoesNotExist(t *testing.T) {
+	is := is.New(t)
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	m := NewMockmodeler(ctrl)
+
+	orgID := "test-org"
+	appID := "test-app"
+	deltaID := "0123456789ABCDEFDEADBEEFDEADBEEFDEADBEEF"
+
+	userProvidedDelta := depset.Delta{
+		Modules: depset.ModuleDeltas{
+			Add: map[string]map[string]interface{}{
+				"test-module": map[string]interface{}{
+					"version": "TEST_VERSION",
+				},
+			},
+		},
+	}
+
+	m.
+		EXPECT().
+		selectDelta(orgID, appID, deltaID).
+		Return(DeltaWrapper{}, ErrNotFound).
+		Times(1)
+
+	buf, err := json.Marshal([]depset.Delta{userProvidedDelta})
+	is.NoErr(err)
+	body := bytes.NewBuffer(buf)
+
+	res := ExecuteRequest(m, "PATCH", fmt.Sprintf("/orgs/%s/apps/%s/deltas/%s", orgID, appID, deltaID), body, t)
+
+	is.Equal(res.Code, http.StatusNotFound) // Should return 404
+
+}
+
+func TestUpdateDelta(t *testing.T) {
+	is := is.New(t)
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	m := NewMockmodeler(ctrl)
+
+	orgID := "test-org"
+	appID := "test-app"
+	deltaID := "0123456789ABCDEFDEADBEEFDEADBEEFDEADBEEF"
+	currentUser := "UNKNOWN"
+
+	baseDeltaWrapper := DeltaWrapper{
+		ID: deltaID,
+		Metadata: DeltaMetadata{
+			CreatedBy:      "first-user",
+			CreatedAt:      time.Date(2020, time.January, 1, 1, 0, 0, 0, time.UTC),
+			LastModifiedAt: time.Date(2020, time.January, 1, 1, 0, 0, 0, time.UTC),
+			Contributers:   []string{},
+		},
+		Content: depset.Delta{
+			Modules: depset.ModuleDeltas{
+				Add: map[string]map[string]interface{}{
+					"test-module": map[string]interface{}{
+						"version": "TEST_VERSION",
+					},
+				},
+			},
+		},
+	}
+	deltas := []depset.Delta{
+		depset.Delta{
+			Modules: depset.ModuleDeltas{
+				Add: map[string]map[string]interface{}{
+					"second-module": map[string]interface{}{
+						"version": "SECOND_VERSION",
+					},
+				},
+			},
+		},
+	}
+	expectedDeltaWrapper := DeltaWrapper{
+		ID: deltaID,
+		Metadata: DeltaMetadata{
+			CreatedBy:      "first-user",
+			CreatedAt:      time.Date(2020, time.January, 1, 1, 0, 0, 0, time.UTC),
+			LastModifiedAt: time.Date(2020, time.January, 1, 1, 0, 0, 0, time.UTC),
+			Contributers:   []string{currentUser},
+		},
+		Content: depset.Delta{
+			Modules: depset.ModuleDeltas{
+				Add: map[string]map[string]interface{}{
+					"test-module": map[string]interface{}{
+						"version": "TEST_VERSION",
+					},
+					"second-module": map[string]interface{}{
+						"version": "SECOND_VERSION",
+					},
+				},
+				Remove: []string{},
+				Update: map[string][]depset.UpdateAction{},
+			},
+		},
+	}
+
+	m.
+		EXPECT().
+		selectDelta(orgID, appID, deltaID).
+		Return(baseDeltaWrapper, nil).
+		Times(1)
+
+	m.
+		EXPECT().
+		updateDelta(orgID, appID, deltaID, false, IgnoreDateMetadata(expectedDeltaWrapper.Metadata), expectedDeltaWrapper.Content).
+		Return(nil).
+		Times(1)
+
+	buf, err := json.Marshal(deltas)
+	is.NoErr(err)
+	body := bytes.NewBuffer(buf)
+
+	res := ExecuteRequest(m, "PATCH", fmt.Sprintf("/orgs/%s/apps/%s/deltas/%s", orgID, appID, deltaID), body, t)
+
+	is.Equal(res.Code, http.StatusOK) // Should return 200
+
+	var returnedDeltaWrapper DeltaWrapper
+	json.Unmarshal(res.Body.Bytes(), &returnedDeltaWrapper)
+
+	is.True(IgnoreDateMetadata(returnedDeltaWrapper.Metadata).Matches(expectedDeltaWrapper.Metadata)) // Returned Metadata should match expected metadata
+	is.Equal(returnedDeltaWrapper.Content, expectedDeltaWrapper.Content)                              // Returned Delta should match expected delta
 
 }

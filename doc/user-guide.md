@@ -180,8 +180,8 @@ Delta:
 
     {
       "modules" {
-        "update": [
-          "module-one": {
+        "update": {
+          "module-one": [
             {"op": "add", "path": "/configmap/NEW_KEY", "value": "New Value!"},
             {"op": "remove", "path": "/configmap/UNWANTED_KEY"},
             {"op": "replace", "path": "/configmap/HELLO", "value": "Alice!"}
@@ -203,3 +203,228 @@ To find the difference between set `A` and `B`, use the following:
     POST /orgs/my-org/apps/my-app/sets/A?diff=B
 
 This will return the Delta that if applied to `B` would give `A`.
+
+### Updating a Delta
+
+A Delta can be updated by using the `PATCH` method on an existing Delta. The process of patching a Delta is done by
+applying the following rules:
+
+1. Removing a module removes all 'add' and 'update' actions
+2. Adding a module removes all 'remove' and 'update' actions
+3. Updating a module will:
+  - If there is an add for the module, update the module
+  - Otherwise, will add the update to the 'update' actions.
+
+A 'remove' for a module can be removed by adding a module with a `null` body.
+
+All the following examples will assume this is the base Delta:
+
+    {
+      "modules": {
+        "add": {
+          "module-one": {
+            "module": {
+              "image": "registry.walhall.io/my-org/module-one:1.0.0"
+            },
+            "configmap": {
+              "HELLO": "World!"
+            }
+          }
+        },
+        "remove": [
+          "module-two"
+        ],
+        "update": {
+          "module-three": [
+            {"op": "add", "path": "/configmap/NEW_KEY", "value": "New Value!"},
+            {"op": "remove", "path": "/configmap/UNWANTED_KEY"},
+            {"op": "replace", "path": "/configmap/HELLO", "value": "Alice!"}  
+          ]
+        }
+      }
+    }
+
+#### Example: Removing a module (1)
+
+Patching with:
+
+    {
+      "modules": {
+        "remove": [
+          "module-three"
+        ]
+      }
+    }
+
+Results in:
+
+    {
+      "modules": {
+        "add": {
+          "module-one": {
+            "module": {
+              "image": "registry.walhall.io/my-org/module-one:1.0.0"
+            },
+            "configmap": {
+              "HELLO": "World!"
+            }
+          }
+        },
+        "remove": [
+          "module-two",
+          "module-three"
+        ]
+      }
+    }
+
+#### Example: Removing a module (2)
+
+Patching with:
+
+        {
+          "modules": {
+            "remove": [
+              "module-one"
+            ]
+          }
+        }
+
+Results in:
+
+        {
+          "modules": {
+            "remove": [
+              "module-one",
+              "module-two"
+            ],
+            "update": {
+              "module-three": [
+                {"op": "add", "path": "/configmap/NEW_KEY", "value": "New Value!"},
+                {"op": "remove", "path": "/configmap/UNWANTED_KEY"},
+                {"op": "replace", "path": "/configmap/HELLO", "value": "Alice!"}  
+              ]
+            }
+          }
+        }
+
+#### Example: Adding a module overrides update
+
+Patching with:
+
+    {
+      "modules": {
+        "add": {
+          "module-three": {
+            "module": {
+              "image": "registry.walhall.io/my-org/module-two:1.0.0"
+            }
+          }
+        }
+      }
+    }
+
+Results in:
+
+    {
+      "modules": {
+        "add": {
+          "module-one": {
+            "module": {
+              "image": "registry.walhall.io/my-org/module-one:1.0.0"
+            },
+            "configmap": {
+              "HELLO": "World!"
+            }
+          },
+          "module-two": {
+            "module": {
+              "image": "registry.walhall.io/my-org/module-two:1.0.0"
+            }
+          }
+        },
+        "remove": [
+          "module-two"
+        ]
+      }
+    }
+
+#### Example: Adding a module overrides remove
+
+Patching with:
+
+    {
+      "modules": {
+        "add": {
+          "module-two": {
+            "module": {
+              "image": "registry.walhall.io/my-org/module-two:1.0.0"
+            }
+          }
+        }
+      }
+    }
+
+Results in:
+
+    {
+      "modules": {
+        "add": {
+          "module-one": {
+            "module": {
+              "image": "registry.walhall.io/my-org/module-one:1.0.0"
+            }
+            "configmap": {
+              "HELLO": "World!"
+            }
+          },
+          "module-two": {
+            "module": {
+              "image": "registry.walhall.io/my-org/module-two:1.0.0"
+            }
+          }
+        },
+        "update": {
+          "module-three": [
+            {"op": "add", "path": "/configmap/NEW_KEY", "value": "New Value!"},
+            {"op": "remove", "path": "/configmap/UNWANTED_KEY"},
+            {"op": "replace", "path": "/configmap/HELLO", "value": "Alice!"}  
+          ]
+        }
+      }
+    }
+
+#### Example: Adding a module with a null body overrides remove but does not add to add
+
+Patching with:
+
+    {
+      "modules": {
+        "add": {
+          "module-two": null
+        }
+      }
+    }
+
+Results in:
+
+    {
+      "modules": {
+        "add": {
+          "module-one": {
+            "module": {
+              "image": "registry.walhall.io/my-org/module-one:1.0.0"
+            }
+            "configmap": {
+              "HELLO": "World!"
+            }
+          }
+        },
+        "update": {
+          "module-three": [
+            {"op": "add", "path": "/configmap/NEW_KEY", "value": "New Value!"},
+            {"op": "remove", "path": "/configmap/UNWANTED_KEY"},
+            {"op": "replace", "path": "/configmap/HELLO", "value": "Alice!"}  
+          ]
+        }
+      }
+    }

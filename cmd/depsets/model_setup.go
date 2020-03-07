@@ -56,7 +56,7 @@ func initDb(db *sql.DB) error {
 		log.Fatal(err)
 	}
 	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS deltas (
-	    id          SERIAL PRIMARY KEY,
+	    id          VARCHAR(40) NOT NULL PRIMARY KEY,
       org_id      TEXT NOT NULL,
       app_id      TEXT NOT NULL,
 			locked      BOOLEAN NOT NULL,

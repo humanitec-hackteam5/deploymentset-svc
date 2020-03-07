@@ -70,18 +70,19 @@ func (s *server) listDeltas() http.HandlerFunc {
 func (s *server) getDelta() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		params := mux.Vars(r)
-		set, err := s.model.selectDelta(params["orgId"], params["appId"], params["deltaId"])
+		deltaWrapper, err := s.model.selectDelta(params["orgId"], params["appId"], params["deltaId"])
 		if err != nil {
 			w.WriteHeader(500)
 			return
 		}
 
-		jsonSet, err := json.Marshal(set)
+		jsonDeltaWrapper, err := json.Marshal(deltaWrapper)
 		if err != nil {
 			log.Println(err)
 			w.WriteHeader(500)
+			return
 		}
-		w.Write(jsonSet)
+		w.Write(jsonDeltaWrapper)
 	}
 }
 
@@ -178,5 +179,79 @@ func (s *server) replaceDelta() http.HandlerFunc {
 			w.WriteHeader(500)
 			return
 		}
+	}
+}
+
+// updateDelta returns a handler which updates a delte in place
+//
+// The handler expects the organization to be defined by a parameter "orgId", the app by "appId" and deltaId by "deltaId".
+//
+// The new Delta should be provided in the body.
+//
+// The handler returns the following status codes:
+//
+// 200 Delta sucessfully replaced.
+//
+// 404 The deltaId was not found.
+//
+// 409 The deltas cannot be merged as they are not compatible.
+//
+// 422 Delta was malformed
+func (s *server) updateDelta() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		params := mux.Vars(r)
+		var deltas []depset.Delta
+		if r.Body == nil {
+			w.WriteHeader(422)
+			log.Printf("Body of request was nil")
+			return
+		}
+		err := json.NewDecoder(r.Body).Decode(&deltas)
+		if nil != err {
+			w.WriteHeader(422)
+			log.Println(err)
+			return
+		}
+
+		currentDeltaWrapper, err := s.model.selectDelta(params["orgId"], params["appId"], params["deltaId"])
+		if errors.Is(err, ErrNotFound) {
+			w.WriteHeader(404)
+			return
+		}
+
+		metadata := currentDeltaWrapper.Metadata
+		metadata.LastModifiedAt = time.Now().UTC()
+		currentUser := getUser(r)
+
+		if currentUser != metadata.CreatedBy && !isInSlice(metadata.Contributers, currentUser) {
+			newContributers := make([]string, len(metadata.Contributers), len(metadata.Contributers)+1)
+			copy(newContributers, metadata.Contributers)
+			metadata.Contributers = append(newContributers, currentUser)
+		}
+
+		newDelta, err := depset.MergeDeltas(currentDeltaWrapper.Content, deltas...)
+		if err != nil {
+			log.Println(err)
+			w.WriteHeader(http.StatusConflict)
+			return
+		}
+
+		err = s.model.updateDelta(params["orgId"], params["appId"], params["deltaId"], false, metadata, newDelta)
+		if err != nil {
+			w.WriteHeader(500)
+			return
+		}
+
+		jsonDeltaWrapper, err := json.Marshal(DeltaWrapper{
+			ID:       params["deltaId"],
+			Metadata: metadata,
+			Content:  newDelta,
+		})
+		if err != nil {
+			log.Println(err)
+			w.WriteHeader(500)
+			return
+		}
+		w.Write(jsonDeltaWrapper)
 	}
 }

@@ -3,6 +3,7 @@ package depset
 // Set is the actual Deployment Set
 type Set struct {
 	Modules map[string]map[string]interface{} `json:"modules"`
+	Version int                               `json:"version"`
 }
 
 // ModuleSpec is all of the data for a module.

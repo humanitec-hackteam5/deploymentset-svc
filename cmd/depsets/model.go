@@ -3,10 +3,13 @@ package main
 import (
 	"database/sql"
 	"database/sql/driver"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
+	"math/rand"
+	"time"
 
 	"humanitec.io/deploymentset-svc/pkg/depset"
 )
@@ -196,12 +199,27 @@ func (db model) selectAllDeltas(orgID string, appID string) ([]DeltaWrapper, err
 
 // insertDelta stores a delta for a particular app.
 func (db model) insertDelta(orgID, appID string, locked bool, metadata DeltaMetadata, content depset.Delta) (string, error) {
-	row := db.QueryRow(`INSERT INTO deltas (org_id, app_id, locked, metadata, content ) VALUES ($1, $2, $3, $4, $5) ON CONFLICT DO NOTHING RETURNING id`, orgID, appID, locked, (*persistableDeltaMetadata)(&metadata), (*persistableDelta)(&content))
+
+	// We just need a unique ID here. Does not need to be cryptographically unguessable - just unique.
+	rand.Seed(time.Now().UnixNano())
+	randomValue := make([]byte, 20, 20)
+	notUnique := false
 	var id string
-	err := row.Scan(&id)
-	if err != nil {
-		log.Printf("Database error inserting delta in org `%s` and app `%s. (%v)", orgID, appID, err)
-		return "", fmt.Errorf("insert delta (%s, %s): %w", orgID, appID, err)
+
+	for notUnique {
+		rand.Read(randomValue)
+		id = hex.EncodeToString(randomValue)
+		result, err := db.Exec(`INSERT INTO deltas (org_id, app_id, id, locked, metadata, content ) VALUES ($1, $2, $3, $4, $5) ON CONFLICT DO NOTHING`, orgID, appID, id, locked, (*persistableDeltaMetadata)(&metadata), (*persistableDelta)(&content))
+		if err != nil {
+			log.Printf("Database error inserting delta in org `%s` and app `%s` and ID `%s`. (%v)", orgID, appID, id, err)
+			return "", fmt.Errorf("insert delta: %w", err)
+		}
+		numRows, err := result.RowsAffected()
+		if err != nil {
+			log.Printf("Database error requesting rows-affected inserting delta in org `%s` and app `%s` and ID `%s`. (%v)", orgID, appID, id, err)
+			return "", fmt.Errorf("rows affected, insert delta: %w", err)
+		}
+		notUnique = numRows == 0
 	}
 	return id, nil
 }
