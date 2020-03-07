@@ -793,7 +793,7 @@ func validateHash(inputSet Set, expected string, t *testing.T) {
 
 func TestHashEmptgySetNil(t *testing.T) {
 	inputSet := Set{}
-	expectedHash := "0000000000000000000000000000000000000000"
+	expectedHash := "0000000000000000000000000000000000000000000"
 
 	validateHash(inputSet, expectedHash, t)
 }
@@ -814,7 +814,7 @@ func TestHashGeneralCase(t *testing.T) {
 			},
 		},
 	}
-	expectedHash := "b9fe8e88cfee30dff184e3bd8985421942db2e54233ea736cbac07c9fcba7814"
+	expectedHash := "uf6OiM_uMN_xhOO9iYVCGULbLlQjPqc2y6wHyfy6eBQ"
 
 	validateHash(inputSet, expectedHash, t)
 }

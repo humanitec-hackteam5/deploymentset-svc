@@ -2,7 +2,7 @@ package depset
 
 import (
 	"crypto/sha256"
-	"encoding/hex"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -388,12 +388,14 @@ func (inputSet Set) Hash() string {
 
 	// sepecial case for the empty set, the hash is zero
 	if len(inputSet.Modules) == 0 {
-		return "0000000000000000000000000000000000000000"
+		return "0000000000000000000000000000000000000000000"
 	}
 
 	arrSet := [2]interface{}{"modules", getModulesAsSortedSlice(inputSet.Modules)}
 
 	buf, _ := json.Marshal(arrSet)
 	checksum := sha256.Sum256(buf)
-	return hex.EncodeToString(checksum[:])
+
+	// RawURLEncoding makes for URL safe IDs that don't have trailing '='. This means no URL encoding required.
+	return base64.RawURLEncoding.EncodeToString(checksum[:])
 }

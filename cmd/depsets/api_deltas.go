@@ -21,9 +21,9 @@ type DeltaWrapper struct {
 
 // DeltaMetadata contains things like first creation date and who created it
 type DeltaMetadata struct {
-	CreatedBy      string    `json:"createdBy"`
-	CreatedAt      time.Time `json:"createdAt"`
-	LastModifiedAt time.Time `json:"lastModifiedAt"`
+	CreatedBy      string    `json:"created_by"`
+	CreatedAt      time.Time `json:"created_at"`
+	LastModifiedAt time.Time `json:"last_modified_at"`
 	Contributers   []string  `json:"contributers,omitempty"`
 }
 
@@ -192,9 +192,9 @@ func (s *server) replaceDelta() http.HandlerFunc {
 //
 // 200 Delta sucessfully replaced.
 //
-// 404 The deltaId was not found.
+// 400 The deltas cannot be merged as they are not compatible.
 //
-// 409 The deltas cannot be merged as they are not compatible.
+// 404 The deltaId was not found.
 //
 // 422 Delta was malformed
 func (s *server) updateDelta() http.HandlerFunc {
@@ -202,20 +202,31 @@ func (s *server) updateDelta() http.HandlerFunc {
 		params := mux.Vars(r)
 		var deltas []depset.Delta
 		if r.Body == nil {
-			w.WriteHeader(422)
+			w.WriteHeader(http.StatusUnprocessableEntity)
 			log.Printf("Body of request was nil")
 			return
 		}
 		err := json.NewDecoder(r.Body).Decode(&deltas)
 		if nil != err {
-			w.WriteHeader(422)
+			w.WriteHeader(http.StatusUnprocessableEntity)
 			log.Println(err)
 			return
 		}
 
 		currentDeltaWrapper, err := s.model.selectDelta(params["orgId"], params["appId"], params["deltaId"])
 		if errors.Is(err, ErrNotFound) {
-			w.WriteHeader(404)
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+
+		if len(deltas) == 0 {
+			jsonDeltaWrapper, err := json.Marshal(currentDeltaWrapper)
+			if err != nil {
+				log.Println(err)
+				w.WriteHeader(500)
+				return
+			}
+			w.Write(jsonDeltaWrapper)
 			return
 		}
 
@@ -232,7 +243,7 @@ func (s *server) updateDelta() http.HandlerFunc {
 		newDelta, err := depset.MergeDeltas(currentDeltaWrapper.Content, deltas...)
 		if err != nil {
 			log.Println(err)
-			w.WriteHeader(http.StatusConflict)
+			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
 

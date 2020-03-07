@@ -279,12 +279,12 @@ func TestApplyDelta(t *testing.T) {
 
 	res := ExecuteRequest(m, "POST", fmt.Sprintf("/orgs/%s/apps/%s/sets/%s", orgID, appID, inputSetID), body, t)
 
-	is.Equal(res.Code, http.StatusCreated) // Should return 201
+	is.Equal(res.Code, http.StatusOK) // Should return 200
 
 	var outputID string
 	json.Unmarshal(res.Body.Bytes(), &outputID)
 
-	is.Equal(outputID, "e1baae2d638987e1ae70ab1a1cec6d4905f780c9") // Returned Sets should match initilal sets
+	is.Equal(outputID, "mgwhntlRovaKCM30yBlQrLOnzWz9w6nZ-b82hSeIrfQ") // Returned Sets should match initilal sets
 
 }
 
@@ -328,12 +328,12 @@ func TestApplyDelta_ToZeroSet(t *testing.T) {
 
 	res := ExecuteRequest(m, "POST", fmt.Sprintf("/orgs/%s/apps/%s/sets/%s", orgID, appID, inputSetID), body, t)
 
-	is.Equal(res.Code, http.StatusCreated) // Should return 201 (As the new set was added)
+	is.Equal(res.Code, http.StatusOK) // Should return 201 (As the new set was added)
 
 	var outputID string
 	json.Unmarshal(res.Body.Bytes(), &outputID)
 
-	is.Equal(outputID, "4efb2d1ae4f101a1ef4e0a08705910191868c5cc")
+	is.Equal(outputID, "CxtOgS619lvcCDnMqRDMAf5b7-huv5qkc74b8W4laOY")
 
 }
 
@@ -382,7 +382,7 @@ func TestApplyDelta_SetAlreadyExists(t *testing.T) {
 	var outputID string
 	json.Unmarshal(res.Body.Bytes(), &outputID)
 
-	is.Equal(outputID, "4efb2d1ae4f101a1ef4e0a08705910191868c5cc")
+	is.Equal(outputID, "CxtOgS619lvcCDnMqRDMAf5b7-huv5qkc74b8W4laOY")
 
 }
 

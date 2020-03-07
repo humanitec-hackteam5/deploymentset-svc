@@ -561,3 +561,56 @@ func TestUpdateDelta(t *testing.T) {
 	is.Equal(returnedDeltaWrapper.Content, expectedDeltaWrapper.Content)                              // Returned Delta should match expected delta
 
 }
+
+func TestUpdateDelta_EmptyPayload(t *testing.T) {
+	is := is.New(t)
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	m := NewMockmodeler(ctrl)
+
+	orgID := "test-org"
+	appID := "test-app"
+	deltaID := "0123456789ABCDEFDEADBEEFDEADBEEFDEADBEEF"
+
+	expectedDeltaWrapper := DeltaWrapper{
+		ID: deltaID,
+		Metadata: DeltaMetadata{
+			CreatedBy:      "first-user",
+			CreatedAt:      time.Date(2020, time.January, 1, 1, 0, 0, 0, time.UTC),
+			LastModifiedAt: time.Date(2020, time.January, 1, 1, 0, 0, 0, time.UTC),
+			Contributers:   []string{},
+		},
+		Content: depset.Delta{
+			Modules: depset.ModuleDeltas{
+				Add: map[string]map[string]interface{}{
+					"test-module": map[string]interface{}{
+						"version": "TEST_VERSION",
+					},
+				},
+			},
+		},
+	}
+	deltas := []depset.Delta{}
+
+	m.
+		EXPECT().
+		selectDelta(orgID, appID, deltaID).
+		Return(expectedDeltaWrapper, nil).
+		Times(1)
+
+	buf, err := json.Marshal(deltas)
+	is.NoErr(err)
+	body := bytes.NewBuffer(buf)
+
+	res := ExecuteRequest(m, "PATCH", fmt.Sprintf("/orgs/%s/apps/%s/deltas/%s", orgID, appID, deltaID), body, t)
+
+	is.Equal(res.Code, http.StatusOK) // Should return 200
+
+	var returnedDeltaWrapper DeltaWrapper
+	json.Unmarshal(res.Body.Bytes(), &returnedDeltaWrapper)
+
+	is.True(IgnoreDateMetadata(returnedDeltaWrapper.Metadata).Matches(expectedDeltaWrapper.Metadata)) // Returned Metadata should match expected metadata
+	is.Equal(returnedDeltaWrapper.Content, expectedDeltaWrapper.Content)                              // Returned Delta should match expected delta
+
+}

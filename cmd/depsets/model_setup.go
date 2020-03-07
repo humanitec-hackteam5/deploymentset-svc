@@ -45,7 +45,7 @@ func initDb(db *sql.DB) error {
 		log.Fatal("Unable to connect to Database. ")
 	}
 	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS sets (
-	    id          VARCHAR(40) NOT NULL PRIMARY KEY,
+	    id          TEXT NOT NULL PRIMARY KEY,
       org_id      TEXT NOT NULL,
       app_id      TEXT NOT NULL,
 			metadata    JSONB NOT NULL,
@@ -56,7 +56,7 @@ func initDb(db *sql.DB) error {
 		log.Fatal(err)
 	}
 	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS deltas (
-	    id          VARCHAR(40) NOT NULL PRIMARY KEY,
+	    id          TEXT NOT NULL NOT NULL PRIMARY KEY,
       org_id      TEXT NOT NULL,
       app_id      TEXT NOT NULL,
 			locked      BOOLEAN NOT NULL,

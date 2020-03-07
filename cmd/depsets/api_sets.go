@@ -165,9 +165,7 @@ func (s *server) diffSets() http.HandlerFunc {
 //
 // The handler returns the following status codes:
 //
-// 200 Delta applied, set already exists; body of response is new set ID
-//
-// 201 Delta applied, set was created for first time; body of response is new set ID
+// 200 Delta applied; body of response is new set ID
 //
 // 400 Delta is not compatible with set
 //
@@ -224,14 +222,13 @@ func (s *server) applyDelta() http.HandlerFunc {
 		newSw.ID = newSw.Content.Hash()
 
 		err = s.model.insertSet(params["orgId"], params["appId"], newSw)
-		if err == ErrAlreadyExists {
-			w.WriteHeader(200)
-		} else if err != nil {
+		if err != nil && err != ErrAlreadyExists {
 			w.WriteHeader(500)
 			return
-		} else {
-			w.WriteHeader(201)
 		}
-		fmt.Fprintf(w, `"%s"`, newSw.ID)
+
+		w.WriteHeader(http.StatusOK)
+		out, _ := json.Marshal(newSw.ID)
+		w.Write(out)
 	}
 }
