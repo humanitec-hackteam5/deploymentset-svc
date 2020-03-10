@@ -72,7 +72,11 @@ func (s *server) getDelta() http.HandlerFunc {
 		params := mux.Vars(r)
 		deltaWrapper, err := s.model.selectDelta(params["orgId"], params["appId"], params["deltaId"])
 		if err != nil {
-			w.WriteHeader(500)
+			if errors.Is(err, ErrNotFound) {
+				w.WriteHeader(http.StatusNotFound)
+			} else {
+				w.WriteHeader(500)
+			}
 			return
 		}
 

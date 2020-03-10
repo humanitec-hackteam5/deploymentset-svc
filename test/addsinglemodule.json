@@ -1,9 +1,0 @@
-{
-  "modules": {
-    "add": {
-      "test-module" : {
-        "version": "V01"
-      }
-    }
-  }
-}

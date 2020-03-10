@@ -203,13 +203,13 @@ func (db model) insertDelta(orgID, appID string, locked bool, metadata DeltaMeta
 	// We just need a unique ID here. Does not need to be cryptographically unguessable - just unique.
 	rand.Seed(time.Now().UnixNano())
 	randomValue := make([]byte, 20, 20)
-	notUnique := false
+	notUnique := true
 	var id string
 
 	for notUnique {
 		rand.Read(randomValue)
 		id = hex.EncodeToString(randomValue)
-		result, err := db.Exec(`INSERT INTO deltas (org_id, app_id, id, locked, metadata, content ) VALUES ($1, $2, $3, $4, $5) ON CONFLICT DO NOTHING`, orgID, appID, id, locked, (*persistableDeltaMetadata)(&metadata), (*persistableDelta)(&content))
+		result, err := db.Exec(`INSERT INTO deltas (org_id, app_id, id, locked, metadata, content ) VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT DO NOTHING`, orgID, appID, id, locked, (*persistableDeltaMetadata)(&metadata), (*persistableDelta)(&content))
 		if err != nil {
 			log.Printf("Database error inserting delta in org `%s` and app `%s` and ID `%s`. (%v)", orgID, appID, id, err)
 			return "", fmt.Errorf("insert delta: %w", err)
@@ -226,10 +226,18 @@ func (db model) insertDelta(orgID, appID string, locked bool, metadata DeltaMeta
 
 // updateDelta stores a delta for a particular app.
 func (db model) updateDelta(orgID, appID, deltaID string, locked bool, metadata DeltaMetadata, delta depset.Delta) error {
-	_, err := db.Exec(`UPDATE deltas SET (metadata = $4, content = $5 ) WHERE org_id = $1, app_id = $2, id = $3`, orgID, appID, deltaID, (*persistableDeltaMetadata)(&metadata), (*persistableDelta)(&delta))
+	result, err := db.Exec(`UPDATE deltas SET metadata = $4, content = $5 WHERE org_id = $1 AND app_id = $2 AND id = $3`, orgID, appID, deltaID, (*persistableDeltaMetadata)(&metadata), (*persistableDelta)(&delta))
 	if err != nil {
 		log.Printf("Database error updating delta `%s`. (%v)", deltaID, err)
 		return fmt.Errorf("update delta (%s): %w", deltaID, err)
+	}
+	numRows, err := result.RowsAffected()
+	if err != nil {
+		log.Printf("Database error requesting rows-affected updating delta in org `%s` and app `%s` and ID `%s`. (%v)", orgID, appID, deltaID, err)
+		return fmt.Errorf("rows affected, update delta: %w", err)
+	}
+	if numRows == 0 {
+		return ErrNotFound
 	}
 	return nil
 }
@@ -237,7 +245,7 @@ func (db model) updateDelta(orgID, appID, deltaID string, locked bool, metadata 
 // selecteSet fetches a particular set from an app.
 // The ErrNotFound sential error is returned if the specific set could not be found.
 func (db model) selectDelta(orgID string, appID string, deltaID string) (DeltaWrapper, error) {
-	row := db.QueryRow(`SELECT id, metadata, content FROM sets WHERE org_id = $1 AND app_id = $2 AND id = $3`, orgID, appID, deltaID)
+	row := db.QueryRow(`SELECT id, metadata, content FROM deltas WHERE org_id = $1 AND app_id = $2 AND id = $3`, orgID, appID, deltaID)
 	var dw DeltaWrapper
 	err := row.Scan(&dw.ID, (*persistableDeltaMetadata)(&dw.Metadata), (*persistableDelta)(&dw.Content))
 	if err == sql.ErrNoRows {
