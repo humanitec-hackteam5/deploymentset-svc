@@ -41,6 +41,20 @@ Mock for the `humanitec.io/deploymentset-svc/cmd/depset` tests can be regenerate
 
     $ mockgen -source=main.go -destination=modeler_mock.go -package=main modeler
 
+## Testing with a database
+
+The Go unit tests do not cover any of the database code. Tests on this can be run as follows:
+
+Build the image and run it with docker-compose:
+
+    $ docker-compose build && docker-compose up
+
+Build the package and run the integration tests:
+
+    $ cd tests/integration
+    $ npm install
+    $ node index.js
+
 ## Implementation Notes
 The code is divided into a reusable package `humanitec.io/deploymentset-svc/pkg/depset` a command that provides the service endpoints itself.
 ### humanitec.io/deploymentset-svc/pkg/depset
@@ -50,6 +64,12 @@ This provides the three core deployment set manipulations:
 | Apply | Apply a Delta to a Deployment Set, generating a new Deployment Set |
 | Diff | Generate a Delta describing how to get from one Deployment Set to another. |
 | Hash | Generate an invariant ID from a deployment set. |
+
+It provides one operation for merging Deltas:
+| Operation | Description |
+|---|---|
+| MergeDeltas | Combines 2 or more Deltas into a single Delta |
+
 
 ### humanitec.io/deploymentset-svc/cmd/depset
 Provides the command that actually runs the server serving the REST endpoints.

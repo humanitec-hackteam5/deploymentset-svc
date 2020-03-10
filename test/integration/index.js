@@ -14,7 +14,7 @@ function GET(url) {
   return fetch(baseURL + url)
 }
 
-function HttpOK(res) {
+function CheckHttpOK(res) {
   if (res.ok) {
     return res.json();
   }
@@ -62,34 +62,34 @@ const updateDeltas = [
 ];
 
 POST(`/orgs/my-org/apps/my-app/sets/0`, startDelta)
-  .then(HttpOK)
+  .then(CheckHttpOK)
 
   .then(id => GET(`/orgs/my-org/apps/my-app/sets/${id}`))
-  .then(HttpOK)
+  .then(CheckHttpOK)
 
   .catch(err => console.log(`FAIL: ${err}`))
   .then(() => console.log(`SUCCESS: Create Set past`), err => console.log(`FAIL: ${err}`));
 
 POST(`/orgs/my-org/apps/my-app/deltas`, startDelta)
-  .then(HttpOK)
+  .then(CheckHttpOK)
 
   .then(id => GET(`/orgs/my-org/apps/my-app/deltas/${id}`))
-  .then(HttpOK)
+  .then(CheckHttpOK)
 
   .then(() => console.log(`SUCCESS: Create Delta past`), err => console.log(`FAIL: ${err}`));
 
-  POST(`/orgs/my-org/apps/my-app/deltas`, startDelta)
-    .then(HttpOK)
+POST(`/orgs/my-org/apps/my-app/deltas`, startDelta)
+  .then(CheckHttpOK)
 
-    .then(id => PATCH(`/orgs/my-org/apps/my-app/deltas/${id}`, updateDeltas))
-    .then(HttpOK)
+  .then(id => PATCH(`/orgs/my-org/apps/my-app/deltas/${id}`, updateDeltas))
+  .then(CheckHttpOK)
 
-    .then(dw => GET(`/orgs/my-org/apps/my-app/deltas/${dw.id}`))
-    .then(HttpOK)
-    .then(dw => {
-      if (dw.content.modules.add["module-one"].configmap.NEW_VAR != "Hello!") {
-        throw "Updated delta not retrieved!";
-      }
-    })
+  .then(dw => GET(`/orgs/my-org/apps/my-app/deltas/${dw.id}`))
+  .then(CheckHttpOK)
+  .then(dw => {
+    if (dw.content.modules.add["module-one"].configmap.NEW_VAR != "Hello!") {
+      throw "Updated delta not retrieved!";
+    }
+  })
 
-    .then(() => console.log(`SUCCESS: Update Delta past`), err => console.log(`FAIL: ${err}`));
+  .then(() => console.log(`SUCCESS: Update Delta past`), err => console.log(`FAIL: ${err}`));
