@@ -2,8 +2,8 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
-	"log"
 	"net/http"
 	"time"
 
@@ -51,13 +51,7 @@ func (s *server) listSets() http.HandlerFunc {
 			return
 		}
 
-		jsonSets, err := json.Marshal(sets)
-		if err != nil {
-			log.Println(err)
-			w.WriteHeader(500)
-			return
-		}
-		w.Write(jsonSets)
+		writeAsJSON(w, http.StatusOK, sets)
 	}
 }
 
@@ -67,18 +61,26 @@ func (s *server) listSets() http.HandlerFunc {
 func (s *server) getUnscopedRawSet() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		params := mux.Vars(r)
+
+		// Short circit for the null set
+		if isZeroHash(params["setId"]) {
+			writeAsJSON(w, http.StatusOK, depset.Set{
+				Modules: map[string]map[string]interface{}{},
+			})
+			return
+		}
+
 		set, err := s.model.selectUnscopedRawSet(params["setId"])
 		if err != nil {
+			if errors.Is(err, ErrNotFound) {
+				writeAsJSON(w, http.StatusNotFound, fmt.Sprintf(`Set with ID "%s" not available in Application "%s/%s".`, params["setId"], params["orgId"], params["appId"]))
+				return
+			}
 			w.WriteHeader(500)
 			return
 		}
 
-		jsonSet, err := json.Marshal(set)
-		if err != nil {
-			log.Println(err)
-			w.WriteHeader(500)
-		}
-		w.Write(jsonSet)
+		writeAsJSON(w, http.StatusOK, set)
 	}
 }
 
@@ -88,19 +90,26 @@ func (s *server) getUnscopedRawSet() http.HandlerFunc {
 func (s *server) getSet() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		params := mux.Vars(r)
+
+		// Short circit for the null set
+		if isZeroHash(params["setId"]) {
+			writeAsJSON(w, http.StatusOK, depset.Set{
+				Modules: map[string]map[string]interface{}{},
+			})
+			return
+		}
+
 		set, err := s.model.selectSet(params["orgId"], params["appId"], params["setId"])
 		if err != nil {
+			if errors.Is(err, ErrNotFound) {
+				writeAsJSON(w, http.StatusNotFound, fmt.Sprintf(`Set with ID "%s" not available in Application "%s/%s".`, params["setId"], params["orgId"], params["appId"]))
+				return
+			}
 			w.WriteHeader(500)
 			return
 		}
 
-		jsonSet, err := json.Marshal(set)
-		if err != nil {
-			log.Println(err)
-			w.WriteHeader(500)
-			return
-		}
-		w.Write(jsonSet)
+		writeAsJSON(w, http.StatusOK, set)
 	}
 }
 
@@ -122,8 +131,7 @@ func (s *server) diffSets() http.HandlerFunc {
 		if !isZeroHash(params["leftSetId"]) {
 			leftSet, err = s.model.selectRawSet(params["orgId"], params["appId"], params["leftSetId"])
 			if err == ErrNotFound {
-				w.WriteHeader(404)
-				fmt.Fprintf(w, `"Set with ID \"%s\" does not exist."`, params["leftSetId"])
+				writeAsJSON(w, http.StatusNotFound, fmt.Sprintf(`Set with ID "%s" not available in Application "%s/%s".`, params["leftSetId"], params["orgId"], params["appId"]))
 				return
 			} else if err != nil {
 				w.WriteHeader(500)
@@ -135,8 +143,7 @@ func (s *server) diffSets() http.HandlerFunc {
 		if !isZeroHash(params["rightSetId"]) {
 			rightSet, err = s.model.selectRawSet(params["orgId"], params["appId"], params["rightSetId"])
 			if err == ErrNotFound {
-				w.WriteHeader(404)
-				fmt.Fprintf(w, `"Set with ID \"%s\" does not exist."`, params["rightSetId"])
+				writeAsJSON(w, http.StatusNotFound, fmt.Sprintf(`Set with ID "%s" not available in Application "%s/%s".`, params["rightSetId"], params["orgId"], params["appId"]))
 				return
 			} else if err != nil {
 				w.WriteHeader(500)
@@ -146,14 +153,7 @@ func (s *server) diffSets() http.HandlerFunc {
 
 		delta := leftSet.Diff(rightSet)
 
-		jsonDelta, err := json.Marshal(delta)
-		if err != nil {
-			log.Println(err)
-			w.WriteHeader(500)
-			return
-		}
-		w.WriteHeader(200)
-		w.Write(jsonDelta)
+		writeAsJSON(w, http.StatusOK, delta)
 	}
 }
 
@@ -175,16 +175,14 @@ func (s *server) diffSets() http.HandlerFunc {
 func (s *server) applyDelta() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		params := mux.Vars(r)
-		var delta depset.Delta
 		if r.Body == nil {
-			w.WriteHeader(422)
-			log.Printf("Body of request was nil")
+			w.WriteHeader(http.StatusUnprocessableEntity)
 			return
 		}
+		var delta depset.Delta
 		err := json.NewDecoder(r.Body).Decode(&delta)
 		if nil != err {
-			w.WriteHeader(422)
-			log.Println(err)
+			w.WriteHeader(http.StatusUnprocessableEntity)
 			return
 		}
 
@@ -192,8 +190,7 @@ func (s *server) applyDelta() http.HandlerFunc {
 		if !isZeroHash(params["setId"]) {
 			set, err = s.model.selectRawSet(params["orgId"], params["appId"], params["setId"])
 			if err == ErrNotFound {
-				w.WriteHeader(404)
-				fmt.Fprintf(w, `"Set with ID \"%s\" does not exist."`, params["setId"])
+				writeAsJSON(w, http.StatusNotFound, fmt.Sprintf(`"Set with ID \"%s\" does not exist."`, params["setId"]))
 				return
 			} else if err != nil {
 				w.WriteHeader(500)
@@ -215,8 +212,7 @@ func (s *server) applyDelta() http.HandlerFunc {
 		newSw := SetWrapper{}
 		newSw.Content, err = set.Apply(delta)
 		if err != nil {
-			w.WriteHeader(400)
-			fmt.Fprintf(w, `"Delta is not compatible with Set"`)
+			writeAsJSON(w, http.StatusBadRequest, "Delta is not compatible with Set")
 			return
 		}
 		newSw.ID = newSw.Content.Hash()
@@ -227,8 +223,6 @@ func (s *server) applyDelta() http.HandlerFunc {
 			return
 		}
 
-		w.WriteHeader(http.StatusOK)
-		out, _ := json.Marshal(newSw.ID)
-		w.Write(out)
+		writeAsJSON(w, http.StatusOK, newSw.ID)
 	}
 }

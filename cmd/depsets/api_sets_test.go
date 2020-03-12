@@ -112,6 +112,28 @@ func TestGetSet(t *testing.T) {
 
 }
 
+func TestGetSet_NotFound(t *testing.T) {
+	is := is.New(t)
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	m := NewMockmodeler(ctrl)
+
+	orgID := "test-org"
+	appID := "test-app"
+	setID := "0123456789ABCDEFDEADBEEFDEADBEEFDEADBEEF"
+
+	m.
+		EXPECT().
+		selectSet(orgID, appID, setID).
+		Return(SetWrapper{}, ErrNotFound).
+		Times(1)
+
+	res := ExecuteRequest(m, "GET", fmt.Sprintf("/orgs/%s/apps/%s/sets/%s", orgID, appID, setID), nil, t)
+
+	is.Equal(res.Code, http.StatusNotFound) // Should return 404
+}
+
 func TestGetUnscopedSet(t *testing.T) {
 	is := is.New(t)
 	ctrl := gomock.NewController(t)

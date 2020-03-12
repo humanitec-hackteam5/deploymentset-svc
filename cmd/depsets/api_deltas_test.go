@@ -322,7 +322,7 @@ func TestReplaceDelta(t *testing.T) {
 
 	res := ExecuteRequest(m, "PUT", fmt.Sprintf("/orgs/%s/apps/%s/deltas/%s", orgID, appID, deltaID), body, t)
 
-	is.Equal(res.Code, http.StatusOK) // Should return 200
+	is.Equal(res.Code, http.StatusNoContent) // Should return 204
 
 }
 
@@ -391,7 +391,7 @@ func TestReplaceDelta_SameUser(t *testing.T) {
 
 	res := ExecuteRequest(m, "PUT", fmt.Sprintf("/orgs/%s/apps/%s/deltas/%s", orgID, appID, deltaID), body, t)
 
-	is.Equal(res.Code, http.StatusOK) // Should return 200
+	is.Equal(res.Code, http.StatusNoContent) // Should return 204
 
 }
 

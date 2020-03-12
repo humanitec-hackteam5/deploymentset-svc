@@ -42,25 +42,19 @@ func isInSlice(slice []string, str string) bool {
 func (s *server) listDeltas() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		params := mux.Vars(r)
-		sets, err := s.model.selectAllDeltas(params["orgId"], params["appId"])
+		deltas, err := s.model.selectAllDeltas(params["orgId"], params["appId"])
 		if err != nil {
 			w.WriteHeader(500)
 			return
 		}
 
 		// Handle special case of empty list as it could just be nil.
-		if len(sets) == 0 {
+		if len(deltas) == 0 {
 			fmt.Fprintf(w, `[]`)
 			return
 		}
 
-		jsonSets, err := json.Marshal(sets)
-		if err != nil {
-			log.Println(err)
-			w.WriteHeader(500)
-			return
-		}
-		w.Write(jsonSets)
+		writeAsJSON(w, http.StatusOK, deltas)
 	}
 }
 
@@ -80,13 +74,7 @@ func (s *server) getDelta() http.HandlerFunc {
 			return
 		}
 
-		jsonDeltaWrapper, err := json.Marshal(deltaWrapper)
-		if err != nil {
-			log.Println(err)
-			w.WriteHeader(500)
-			return
-		}
-		w.Write(jsonDeltaWrapper)
+		writeAsJSON(w, http.StatusOK, deltaWrapper)
 	}
 }
 
@@ -106,14 +94,12 @@ func (s *server) createDelta() http.HandlerFunc {
 		params := mux.Vars(r)
 		var delta depset.Delta
 		if r.Body == nil {
-			w.WriteHeader(422)
-			log.Printf("Body of request was nil")
+			w.WriteHeader(http.StatusUnprocessableEntity)
 			return
 		}
 		err := json.NewDecoder(r.Body).Decode(&delta)
 		if nil != err {
-			w.WriteHeader(422)
-			log.Println(err)
+			w.WriteHeader(http.StatusUnprocessableEntity)
 			return
 		}
 
@@ -129,7 +115,7 @@ func (s *server) createDelta() http.HandlerFunc {
 			w.WriteHeader(500)
 			return
 		}
-		fmt.Fprintf(w, `"%s"`, id)
+		writeAsJSON(w, http.StatusOK, id)
 	}
 }
 
@@ -151,20 +137,18 @@ func (s *server) replaceDelta() http.HandlerFunc {
 		params := mux.Vars(r)
 		var delta depset.Delta
 		if r.Body == nil {
-			w.WriteHeader(422)
-			log.Printf("Body of request was nil")
+			w.WriteHeader(http.StatusUnprocessableEntity)
 			return
 		}
 		err := json.NewDecoder(r.Body).Decode(&delta)
 		if nil != err {
-			w.WriteHeader(422)
-			log.Println(err)
+			w.WriteHeader(http.StatusUnprocessableEntity)
 			return
 		}
 
 		currentDeltaWrapper, err := s.model.selectDelta(params["orgId"], params["appId"], params["deltaId"])
 		if errors.Is(err, ErrNotFound) {
-			w.WriteHeader(404)
+			writeAsJSON(w, http.StatusNotFound, fmt.Sprintf(`Delta with ID "%s" not available in Application "%s/%s".`, params["deltaId"], params["orgId"], params["appId"]))
 			return
 		}
 
@@ -183,6 +167,7 @@ func (s *server) replaceDelta() http.HandlerFunc {
 			w.WriteHeader(500)
 			return
 		}
+		w.WriteHeader(http.StatusNoContent)
 	}
 }
 
@@ -207,19 +192,17 @@ func (s *server) updateDelta() http.HandlerFunc {
 		var deltas []depset.Delta
 		if r.Body == nil {
 			w.WriteHeader(http.StatusUnprocessableEntity)
-			log.Printf("Body of request was nil")
 			return
 		}
 		err := json.NewDecoder(r.Body).Decode(&deltas)
 		if nil != err {
 			w.WriteHeader(http.StatusUnprocessableEntity)
-			log.Println(err)
 			return
 		}
 
 		currentDeltaWrapper, err := s.model.selectDelta(params["orgId"], params["appId"], params["deltaId"])
 		if errors.Is(err, ErrNotFound) {
-			w.WriteHeader(http.StatusNotFound)
+			writeAsJSON(w, http.StatusNotFound, fmt.Sprintf(`Delta with ID "%s" not available in Application "%s/%s".`, params["deltaId"], params["orgId"], params["appId"]))
 			return
 		}
 
@@ -257,16 +240,10 @@ func (s *server) updateDelta() http.HandlerFunc {
 			return
 		}
 
-		jsonDeltaWrapper, err := json.Marshal(DeltaWrapper{
+		writeAsJSON(w, http.StatusOK, DeltaWrapper{
 			ID:       params["deltaId"],
 			Metadata: metadata,
 			Content:  newDelta,
 		})
-		if err != nil {
-			log.Println(err)
-			w.WriteHeader(500)
-			return
-		}
-		w.Write(jsonDeltaWrapper)
 	}
 }
