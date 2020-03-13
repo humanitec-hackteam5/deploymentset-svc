@@ -24,7 +24,11 @@ It takes the following environment variables:
 | `GET` | `/orgs/{orgId}/apps/{appId}/sets/{setId}` | A specific deployment set for an app. (Set is wrapped.) |
 | `POST` | `/orgs/{orgId}/apps/{appId}/sets/{setId}` | Create a new deployment set by applying a Deployment delta. (`setId` can be `0` to indicate the null set.) - Delta should be provided as body and should not be wrapped. |
 | `GET` | `/orgs/{orgId}/apps/{appId}/sets/{leftSetId}?diff={rightSetId}` | Generate a Delta that defines how to get from the right set to the left set. (i.e. `POST` `/orgs/{orgId}/apps/{appId}/sets/{rightSetId}` with the returned Delta returns `leftSetId`.) |
-
+| `GET` | `/orgs/{orgId}/apps/{appId}/deltas` | Lists all Deltas for an app, |
+| `POST` | `/orgs/{orgId}/apps/{appId}/deltas` | Creates a new delta, returns a unique ID. |
+| `GET` | `/orgs/{orgId}/apps/{appId}/deltas/{deltaId}` | Fetches a particular delta. |
+| `PUT` | `/orgs/{orgId}/apps/{appId}/deltas/{deltaId}` | Replaces the content of a delta with a new delta. |
+| `PATCH` | `/orgs/{orgId}/apps/{appId}/deltas/{deltaId}` | Applies an array of deltas to a current delta. See [Updating a Delta](doc/user-guide.md#updating-a-delta) |
 
 ## Running locally
 
