@@ -8,7 +8,6 @@ import (
 	"net/http/httptest"
 	"reflect"
 	"testing"
-	"time"
 
 	"github.com/golang/mock/gomock"
 	"github.com/matryer/is"
@@ -83,9 +82,6 @@ func TestGetSet(t *testing.T) {
 	appID := "test-app"
 	setID := "0123456789ABCDEFDEADBEEFDEADBEEFDEADBEEF"
 	expectedSetWrapper := SetWrapper{
-		Metadata: SetMetadata{
-			CreatedAt: time.Date(2020, time.January, 1, 1, 0, 0, 0, time.UTC),
-		},
 		Set: depset.Set{
 			Modules: map[string]map[string]interface{}{
 				"test-module": map[string]interface{}{
@@ -178,9 +174,6 @@ func TestGetAllSets(t *testing.T) {
 	appID := "test-app"
 	expectedSetWrappers := []SetWrapper{
 		SetWrapper{
-			Metadata: SetMetadata{
-				CreatedAt: time.Date(2020, time.January, 1, 1, 0, 0, 0, time.UTC),
-			},
 			Set: depset.Set{
 				Modules: map[string]map[string]interface{}{
 					"test-module": map[string]interface{}{
@@ -190,9 +183,6 @@ func TestGetAllSets(t *testing.T) {
 			},
 		},
 		SetWrapper{
-			Metadata: SetMetadata{
-				CreatedAt: time.Date(2020, time.January, 1, 2, 0, 0, 0, time.UTC),
-			},
 			Set: depset.Set{
 				Modules: map[string]map[string]interface{}{
 					"test-module2": map[string]interface{}{

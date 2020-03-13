@@ -73,7 +73,6 @@ func initDb(db *sql.DB) error {
       org_id      TEXT NOT NULL,
       app_id      TEXT NOT NULL,
 			set_id      TEXT NOT NULL,
-			metadata    JSONB NOT NULL,
 			UNIQUE (org_id, app_id, set_id)
 	)`)
 	if err != nil {

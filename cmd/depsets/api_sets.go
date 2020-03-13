@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"time"
 
 	"github.com/gorilla/mux"
 	"humanitec.io/deploymentset-svc/pkg/depset"
@@ -13,14 +12,12 @@ import (
 
 // SetWrapper represents the "over-the-wire" structure of a Deployment Set
 type SetWrapper struct {
-	ID       string      `json:"id"`
-	Metadata SetMetadata `json:"metadata"`
+	ID string `json:"id"`
 	depset.Set
 }
 
 // SetMetadata contains things like first creation date and who created it
 type SetMetadata struct {
-	CreatedAt time.Time `json:"createdAt"`
 }
 
 // isZeroHash returns true if the string is entirely made of zeros

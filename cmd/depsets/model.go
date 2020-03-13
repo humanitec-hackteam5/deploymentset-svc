@@ -99,7 +99,12 @@ func (d *persistableDeltaMetadata) Scan(value interface{}) error {
 
 // selectAllSets fetches a list of all the sets created in a particular app
 func (db model) selectAllSets(orgID string, appID string) ([]SetWrapper, error) {
-	rows, err := db.Query(`SELECT id, metadata, content FROM sets WHERE org_id = $1 AND app_id = $2`, orgID, appID)
+	rows, err := db.Query(`
+		SELECT sets.id, sets.set
+		FROM sets
+		LEFT JOIN set_owners
+		ON sets.id = set_id
+		WHERE org_id = $1 AND app_id = $2`, orgID, appID)
 	defer rows.Close()
 	if err != nil {
 		log.Printf("Database error fetching sets in org `%s` and app `%s`. (%v)", orgID, appID, err)
@@ -109,7 +114,7 @@ func (db model) selectAllSets(orgID string, appID string) ([]SetWrapper, error) 
 	var sets []SetWrapper
 	for rows.Next() {
 		var sw SetWrapper
-		rows.Scan(&sw.ID, (*persistableSetMetadata)(&sw.Metadata), (*persistableSet)(&sw.Set))
+		rows.Scan(&sw.ID, (*persistableSet)(&sw.Set))
 		sets = append(sets, sw)
 	}
 	return sets, nil
@@ -118,13 +123,13 @@ func (db model) selectAllSets(orgID string, appID string) ([]SetWrapper, error) 
 // selecteSet fetches a particular set from an app.
 // The ErrNotFound sential error is returned if the specific set could not be found.
 func (db model) selectSet(orgID string, appID string, setID string) (SetWrapper, error) {
-	row := db.QueryRow(`SELECT sets.id, set_owners.metadata, sets.set
-		FROM set_owners
-		LEFT JOIN sets
-		ON id = set_id
-		WHERE org_id = $1 AND app_id = $2 AND set_id = $3`, orgID, appID, setID)
+	row := db.QueryRow(`SELECT sets.id, sets.set
+		FROM sets
+		LEFT JOIN set_owners
+		ON sets.id = set_id
+		WHERE org_id = $1 AND app_id = $2 AND sets.id = $3`, orgID, appID, setID)
 	var sw SetWrapper
-	err := row.Scan(&sw.ID, (*persistableSetMetadata)(&sw.Metadata), (*persistableSet)(&sw.Set))
+	err := row.Scan(&sw.ID, (*persistableSet)(&sw.Set))
 	if err == sql.ErrNoRows {
 		return SetWrapper{}, ErrNotFound
 	} else if err != nil {
@@ -177,7 +182,7 @@ func (db model) insertSet(orgID string, appID string, sw SetWrapper) error {
 		return fmt.Errorf("insert set: %w", err)
 	}
 
-	result, err := db.Exec(`INSERT INTO set_owners (org_id, app_id, set_id, metadata) VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING`, orgID, appID, sw.ID, (*persistableSetMetadata)(&sw.Metadata))
+	result, err := db.Exec(`INSERT INTO set_owners (org_id, app_id, set_id) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`, orgID, appID, sw.ID)
 	if err != nil {
 		log.Printf("Database error inserting set_owners with ID `%s` in app %s/%s. (%v)", sw.ID, orgID, appID, err)
 		return fmt.Errorf("insert set_owners: %w", err)

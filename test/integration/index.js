@@ -100,6 +100,16 @@ POST(`/orgs/${orgId}/apps/${appId}/sets/0`, startDelta)
       throw "Generated Set was not as expected."
     }
   })
+  .then(id => GET(`/orgs/${orgId}/apps/${appId}/sets`))
+  .then(CheckHttpOK)
+  .then(sets => {
+    if (sets.length !== 1) {
+      throw `Expected 1 set in the app, got ${sets.length}`;
+    }
+    if (!sets[0].modules || !sets[0].modules["module-one"] || sets[0].modules["module-one"].profile !== "humanitec/base-module") {
+      throw "Generated Set was not as expected.";
+    }
+  })
 
   .then(() => console.log(`SUCCESS: Create Set`), err => console.log(`FAIL: Create Set: ${err}`));
 
