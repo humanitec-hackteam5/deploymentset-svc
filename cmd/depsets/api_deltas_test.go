@@ -94,7 +94,7 @@ func TestGetDelta(t *testing.T) {
 			CreatedBy:      createdBy,
 			LastModifiedAt: time.Date(2020, time.January, 1, 1, 0, 0, 0, time.UTC),
 		},
-		Content: depset.Delta{
+		Delta: depset.Delta{
 			Modules: depset.ModuleDeltas{
 				Add: map[string]map[string]interface{}{
 					"test-module": map[string]interface{}{
@@ -139,7 +139,7 @@ func TestGetAllDeltas(t *testing.T) {
 				CreatedBy:      "user-01",
 				LastModifiedAt: time.Date(2020, time.January, 1, 1, 0, 0, 0, time.UTC),
 			},
-			Content: depset.Delta{
+			Delta: depset.Delta{
 				Modules: depset.ModuleDeltas{
 					Add: map[string]map[string]interface{}{
 						"test-module": map[string]interface{}{
@@ -156,7 +156,7 @@ func TestGetAllDeltas(t *testing.T) {
 				CreatedBy:      "user-02",
 				LastModifiedAt: time.Date(2020, time.January, 1, 2, 0, 0, 0, time.UTC),
 			},
-			Content: depset.Delta{
+			Delta: depset.Delta{
 				Modules: depset.ModuleDeltas{
 					Add: map[string]map[string]interface{}{
 						"test-module": map[string]interface{}{
@@ -305,7 +305,7 @@ func TestReplaceDelta(t *testing.T) {
 		selectDelta(orgID, appID, deltaID).
 		Return(DeltaWrapper{
 			ID:       deltaID,
-			Content:  previousDelta,
+			Delta:    previousDelta,
 			Metadata: previousMetadata,
 		}, nil).
 		Times(1)
@@ -374,7 +374,7 @@ func TestReplaceDelta_SameUser(t *testing.T) {
 		selectDelta(orgID, appID, deltaID).
 		Return(DeltaWrapper{
 			ID:       deltaID,
-			Content:  previousDelta,
+			Delta:    previousDelta,
 			Metadata: previousMetadata,
 		}, nil).
 		Times(1)
@@ -489,7 +489,7 @@ func TestUpdateDelta(t *testing.T) {
 			LastModifiedAt: time.Date(2020, time.January, 1, 1, 0, 0, 0, time.UTC),
 			Contributers:   []string{},
 		},
-		Content: depset.Delta{
+		Delta: depset.Delta{
 			Modules: depset.ModuleDeltas{
 				Add: map[string]map[string]interface{}{
 					"test-module": map[string]interface{}{
@@ -518,7 +518,7 @@ func TestUpdateDelta(t *testing.T) {
 			LastModifiedAt: time.Date(2020, time.January, 1, 1, 0, 0, 0, time.UTC),
 			Contributers:   []string{currentUser},
 		},
-		Content: depset.Delta{
+		Delta: depset.Delta{
 			Modules: depset.ModuleDeltas{
 				Add: map[string]map[string]interface{}{
 					"test-module": map[string]interface{}{
@@ -542,7 +542,7 @@ func TestUpdateDelta(t *testing.T) {
 
 	m.
 		EXPECT().
-		updateDelta(orgID, appID, deltaID, false, IgnoreDateMetadata(expectedDeltaWrapper.Metadata), expectedDeltaWrapper.Content).
+		updateDelta(orgID, appID, deltaID, false, IgnoreDateMetadata(expectedDeltaWrapper.Metadata), expectedDeltaWrapper.Delta).
 		Return(nil).
 		Times(1)
 
@@ -558,7 +558,7 @@ func TestUpdateDelta(t *testing.T) {
 	json.Unmarshal(res.Body.Bytes(), &returnedDeltaWrapper)
 
 	is.True(IgnoreDateMetadata(returnedDeltaWrapper.Metadata).Matches(expectedDeltaWrapper.Metadata)) // Returned Metadata should match expected metadata
-	is.Equal(returnedDeltaWrapper.Content, expectedDeltaWrapper.Content)                              // Returned Delta should match expected delta
+	is.Equal(returnedDeltaWrapper.Delta, expectedDeltaWrapper.Delta)                                  // Returned Delta should match expected delta
 
 }
 
@@ -581,7 +581,7 @@ func TestUpdateDelta_EmptyPayload(t *testing.T) {
 			LastModifiedAt: time.Date(2020, time.January, 1, 1, 0, 0, 0, time.UTC),
 			Contributers:   []string{},
 		},
-		Content: depset.Delta{
+		Delta: depset.Delta{
 			Modules: depset.ModuleDeltas{
 				Add: map[string]map[string]interface{}{
 					"test-module": map[string]interface{}{
@@ -611,6 +611,6 @@ func TestUpdateDelta_EmptyPayload(t *testing.T) {
 	json.Unmarshal(res.Body.Bytes(), &returnedDeltaWrapper)
 
 	is.True(IgnoreDateMetadata(returnedDeltaWrapper.Metadata).Matches(expectedDeltaWrapper.Metadata)) // Returned Metadata should match expected metadata
-	is.Equal(returnedDeltaWrapper.Content, expectedDeltaWrapper.Content)                              // Returned Delta should match expected delta
+	is.Equal(returnedDeltaWrapper.Delta, expectedDeltaWrapper.Delta)                                  // Returned Delta should match expected delta
 
 }

@@ -16,7 +16,7 @@ import (
 type DeltaWrapper struct {
 	ID       string        `json:"id"`
 	Metadata DeltaMetadata `json:"metadata"`
-	Content  depset.Delta  `json:"content"`
+	depset.Delta
 }
 
 // DeltaMetadata contains things like first creation date and who created it
@@ -227,7 +227,7 @@ func (s *server) updateDelta() http.HandlerFunc {
 			metadata.Contributers = append(newContributers, currentUser)
 		}
 
-		newDelta, err := depset.MergeDeltas(currentDeltaWrapper.Content, deltas...)
+		newDelta, err := depset.MergeDeltas(currentDeltaWrapper.Delta, deltas...)
 		if err != nil {
 			log.Println(err)
 			w.WriteHeader(http.StatusBadRequest)
@@ -243,7 +243,7 @@ func (s *server) updateDelta() http.HandlerFunc {
 		writeAsJSON(w, http.StatusOK, DeltaWrapper{
 			ID:       params["deltaId"],
 			Metadata: metadata,
-			Content:  newDelta,
+			Delta:    newDelta,
 		})
 	}
 }

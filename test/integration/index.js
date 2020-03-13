@@ -1,26 +1,55 @@
 const fetch = require('node-fetch');
 
-const baseURL = "http://localhost:8080"
+const baseURL = "http://localhost:8080";
+
+var showDiagnostics = false
 
 function POST(url, body) {
-  return fetch(baseURL + url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+  if (showDiagnostics) { console.log(`POST ${url}`) }
+  return fetch(baseURL + url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
 }
 
 function PATCH(url, body) {
-  return fetch(baseURL + url, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+  if (showDiagnostics) { console.log(`PATCH ${url}`) }
+  return fetch(baseURL + url, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
 }
 
 function GET(url) {
-  return fetch(baseURL + url)
+  if (showDiagnostics) { console.log(`GET ${url}`) }
+  return fetch(baseURL + url);
+}
+
+function DELETE(url) {
+  if (showDiagnostics) { console.log(`DELETE ${url}`) }
+  return fetch(baseURL + url, { method: 'DELETE'});
 }
 
 function CheckHttpOK(res) {
   if (res.ok) {
-    return res.json();
+    if (res.headers.get("Content-Type") && res.headers.get("Content-Type").startsWith("application/json")) {
+      return res.json();
+    }
+    return res.text();
   }
-  console.log(JSON.stringify(res))
   throw `Expected Success for ${res.url}. Got ${res.status}`;
 }
+
+function CheckHttpStatus(status) {
+  return function (res) {
+    if (res.status === status) {
+      if (res.headers.get("Content-Type") && res.headers.get("Content-Type").startsWith("application/json")) {
+        return res.json();
+      }
+      return res.text();
+    }
+    throw `Expected status of ${status} for ${res.url}. Got ${res.status}`;
+  };
+}
+
+// Create a random organization for our integration test
+const orgId = "test-org-" + Math.floor(Math.random()*65536).toString(16)
+
+const appId = "my-app";
 
 const startDelta = {
   "modules": {
@@ -61,35 +90,39 @@ const updateDeltas = [
   }
 ];
 
-POST(`/orgs/my-org/apps/my-app/sets/0`, startDelta)
+POST(`/orgs/${orgId}/apps/${appId}/sets/0`, startDelta)
   .then(CheckHttpOK)
 
-  .then(id => GET(`/orgs/my-org/apps/my-app/sets/${id}`))
+  .then(id => GET(`/orgs/${orgId}/apps/${appId}/sets/${id}`))
+  .then(CheckHttpOK)
+  .then(set => {
+    if (!set.modules || !set.modules["module-one"] || set.modules["module-one"].profile !== "humanitec/base-module") {
+      throw "Generated Set was not as expected."
+    }
+  })
+
+  .then(() => console.log(`SUCCESS: Create Set`), err => console.log(`FAIL: Create Set: ${err}`));
+
+POST(`/orgs/${orgId}/apps/${appId}/deltas`, startDelta)
   .then(CheckHttpOK)
 
-  .catch(err => console.log(`FAIL: ${err}`))
-  .then(() => console.log(`SUCCESS: Create Set past`), err => console.log(`FAIL: ${err}`));
-
-POST(`/orgs/my-org/apps/my-app/deltas`, startDelta)
+  .then(id => GET(`/orgs/${orgId}/apps/${appId}/deltas/${id}`))
   .then(CheckHttpOK)
 
-  .then(id => GET(`/orgs/my-org/apps/my-app/deltas/${id}`))
+  .then(() => console.log(`SUCCESS: Create Delta`), err => console.log(`FAIL: Create Delta: ${err}`));
+
+POST(`/orgs/${orgId}/apps/${appId}/deltas`, startDelta)
   .then(CheckHttpOK)
 
-  .then(() => console.log(`SUCCESS: Create Delta past`), err => console.log(`FAIL: ${err}`));
-
-POST(`/orgs/my-org/apps/my-app/deltas`, startDelta)
+  .then(id => PATCH(`/orgs/${orgId}/apps/${appId}/deltas/${id}`, updateDeltas))
   .then(CheckHttpOK)
 
-  .then(id => PATCH(`/orgs/my-org/apps/my-app/deltas/${id}`, updateDeltas))
-  .then(CheckHttpOK)
-
-  .then(dw => GET(`/orgs/my-org/apps/my-app/deltas/${dw.id}`))
+  .then(dw => GET(`/orgs/${orgId}/apps/${appId}/deltas/${dw.id}`))
   .then(CheckHttpOK)
   .then(dw => {
-    if (dw.content.modules.add["module-one"].configmap.NEW_VAR != "Hello!") {
+    if (!dw.modules || !dw.modules.add || !dw.modules.add["module-one"] || !dw.modules.add["module-one"].configmap || dw.modules.add["module-one"].configmap.NEW_VAR != "Hello!") {
       throw "Updated delta not retrieved!";
     }
   })
 
-  .then(() => console.log(`SUCCESS: Update Delta past`), err => console.log(`FAIL: ${err}`));
+  .then(() => console.log(`SUCCESS: Update Delta`), err => console.log(`FAIL: Update Delta: ${err}`));

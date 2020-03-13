@@ -15,7 +15,7 @@ import (
 type SetWrapper struct {
 	ID       string      `json:"id"`
 	Metadata SetMetadata `json:"metadata"`
-	Content  depset.Set  `json:"content"`
+	depset.Set
 }
 
 // SetMetadata contains things like first creation date and who created it
@@ -210,12 +210,12 @@ func (s *server) applyDelta() http.HandlerFunc {
 		}
 
 		newSw := SetWrapper{}
-		newSw.Content, err = set.Apply(delta)
+		newSw.Set, err = set.Apply(delta)
 		if err != nil {
 			writeAsJSON(w, http.StatusBadRequest, "Delta is not compatible with Set")
 			return
 		}
-		newSw.ID = newSw.Content.Hash()
+		newSw.ID = newSw.Set.Hash()
 
 		err = s.model.insertSet(params["orgId"], params["appId"], newSw)
 		if err != nil && err != ErrAlreadyExists {

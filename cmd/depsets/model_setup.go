@@ -44,24 +44,50 @@ func initDb(db *sql.DB) error {
 	if attempt >= 6 {
 		log.Fatal("Unable to connect to Database. ")
 	}
+	_, err = db.Exec(`DO $$
+	  BEGIN
+	    IF NOT EXISTS (
+	      SELECT 1 FROM information_schema.tables WHERE table_name = 'set_owners'
+	    )
+	    THEN
+	      DROP TABLE IF EXISTS sets;
+				DROP TABLE IF EXISTS deltas;
+	    END IF;
+	  END
+	$$;`)
+	if err != nil {
+		log.Println("Unable to perform migration.")
+		log.Fatal(err)
+	}
+
 	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS sets (
 	    id          TEXT NOT NULL PRIMARY KEY,
+			set         JSONB NOT NULL
+	)`)
+	if err != nil {
+		log.Println("Unable to create sets table.")
+		log.Fatal(err)
+	}
+
+	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS set_owners (
       org_id      TEXT NOT NULL,
       app_id      TEXT NOT NULL,
+			set_id      TEXT NOT NULL,
 			metadata    JSONB NOT NULL,
-      content     JSONB NOT NULL
+			UNIQUE (org_id, app_id, set_id)
 	)`)
 	if err != nil {
 		log.Println("Unable to create sets table.")
 		log.Fatal(err)
 	}
 	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS deltas (
-	    id          TEXT NOT NULL NOT NULL PRIMARY KEY,
+	    id          TEXT NOT NULL,
       org_id      TEXT NOT NULL,
       app_id      TEXT NOT NULL,
 			locked      BOOLEAN NOT NULL,
 			metadata    JSONB NOT NULL,
-      content     JSONB NOT NULL
+      delta       JSONB NOT NULL,
+			UNIQUE (org_id, app_id, id)
 	)`)
 	if err != nil {
 		log.Println("Unable to create deltas table.")

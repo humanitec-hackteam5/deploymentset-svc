@@ -30,7 +30,7 @@ func (s *justSet) Matches(x interface{}) bool {
 	if !ok {
 		return false
 	}
-	return reflect.DeepEqual(s.s, setToTest.Content)
+	return reflect.DeepEqual(s.s, setToTest.Set)
 }
 
 func (s *justSet) String() string {
@@ -86,7 +86,7 @@ func TestGetSet(t *testing.T) {
 		Metadata: SetMetadata{
 			CreatedAt: time.Date(2020, time.January, 1, 1, 0, 0, 0, time.UTC),
 		},
-		Content: depset.Set{
+		Set: depset.Set{
 			Modules: map[string]map[string]interface{}{
 				"test-module": map[string]interface{}{
 					"version": "TEST_VERSION",
@@ -181,7 +181,7 @@ func TestGetAllSets(t *testing.T) {
 			Metadata: SetMetadata{
 				CreatedAt: time.Date(2020, time.January, 1, 1, 0, 0, 0, time.UTC),
 			},
-			Content: depset.Set{
+			Set: depset.Set{
 				Modules: map[string]map[string]interface{}{
 					"test-module": map[string]interface{}{
 						"version": "TEST_VERSION",
@@ -193,7 +193,7 @@ func TestGetAllSets(t *testing.T) {
 			Metadata: SetMetadata{
 				CreatedAt: time.Date(2020, time.January, 1, 2, 0, 0, 0, time.UTC),
 			},
-			Content: depset.Set{
+			Set: depset.Set{
 				Modules: map[string]map[string]interface{}{
 					"test-module2": map[string]interface{}{
 						"version": "TEST_VERSION2",

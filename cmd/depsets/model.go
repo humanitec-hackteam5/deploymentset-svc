@@ -103,13 +103,13 @@ func (db model) selectAllSets(orgID string, appID string) ([]SetWrapper, error) 
 	defer rows.Close()
 	if err != nil {
 		log.Printf("Database error fetching sets in org `%s` and app `%s`. (%v)", orgID, appID, err)
-		return nil, fmt.Errorf("select all sets: %v", err)
+		return nil, fmt.Errorf("select all sets: %w", err)
 	}
 
 	var sets []SetWrapper
 	for rows.Next() {
 		var sw SetWrapper
-		rows.Scan(&sw.ID, (*persistableSetMetadata)(&sw.Metadata), (*persistableSet)(&sw.Content))
+		rows.Scan(&sw.ID, (*persistableSetMetadata)(&sw.Metadata), (*persistableSet)(&sw.Set))
 		sets = append(sets, sw)
 	}
 	return sets, nil
@@ -118,14 +118,18 @@ func (db model) selectAllSets(orgID string, appID string) ([]SetWrapper, error) 
 // selecteSet fetches a particular set from an app.
 // The ErrNotFound sential error is returned if the specific set could not be found.
 func (db model) selectSet(orgID string, appID string, setID string) (SetWrapper, error) {
-	row := db.QueryRow(`SELECT id, metadata, content FROM sets WHERE org_id = $1 AND app_id = $2 AND id = $3`, orgID, appID, setID)
+	row := db.QueryRow(`SELECT sets.id, set_owners.metadata, sets.set
+		FROM set_owners
+		LEFT JOIN sets
+		ON id = set_id
+		WHERE org_id = $1 AND app_id = $2 AND set_id = $3`, orgID, appID, setID)
 	var sw SetWrapper
-	err := row.Scan(&sw.ID, (*persistableSetMetadata)(&sw.Metadata), (*persistableSet)(&sw.Content))
+	err := row.Scan(&sw.ID, (*persistableSetMetadata)(&sw.Metadata), (*persistableSet)(&sw.Set))
 	if err == sql.ErrNoRows {
 		return SetWrapper{}, ErrNotFound
 	} else if err != nil {
 		log.Printf("Database error fetching set in org `%s` and app `%s` with Id `%s`. (%v)", orgID, appID, setID, err)
-		return SetWrapper{}, fmt.Errorf("select set: %v", err)
+		return SetWrapper{}, fmt.Errorf("select set: %w", err)
 	}
 	return sw, nil
 }
@@ -133,21 +137,26 @@ func (db model) selectSet(orgID string, appID string, setID string) (SetWrapper,
 // selectUnscopedRawSet fetches a particular set.
 // The ErrNotFound sential error is returned if the specific set could not be found.
 func (db model) selectUnscopedRawSet(setID string) (depset.Set, error) {
-	row := db.QueryRow(`SELECT content FROM sets WHERE id = $1`, setID)
+	row := db.QueryRow(`SELECT set FROM sets WHERE id = $1`, setID)
 	var set depset.Set
 	err := row.Scan((*persistableSet)(&set))
 	if err == sql.ErrNoRows {
 		return depset.Set{}, ErrNotFound
 	} else if err != nil {
 		log.Printf("Database error fetching set with Id `%s`. (%v)", setID, err)
-		return depset.Set{}, fmt.Errorf("select set: %v", err)
+		return depset.Set{}, fmt.Errorf("select set: %w", err)
 	}
 	return set, nil
 }
 
 // selectRawSet returns a depset.Set rather than SetWrapper version of a set.
 func (db model) selectRawSet(orgID string, appID string, setID string) (depset.Set, error) {
-	row := db.QueryRow(`SELECT content FROM sets WHERE org_id = $1 AND app_id = $2 AND id = $3`, orgID, appID, setID)
+	row := db.QueryRow(`SELECT sets.set
+		FROM set_owners
+		LEFT JOIN sets
+		ON id = set_id
+		WHERE org_id = $1 AND app_id = $2 AND set_id = $3`,
+		orgID, appID, setID)
 	var set depset.Set
 	err := row.Scan((*persistableSet)(&set))
 	if err == sql.ErrNoRows {
@@ -162,18 +171,24 @@ func (db model) selectRawSet(orgID string, appID string, setID string) (depset.S
 // insertSet stores a set for a particular app.
 // The sentinal error ErrAlreadyExists is returened if that set already exists.
 func (db model) insertSet(orgID string, appID string, sw SetWrapper) error {
-	result, err := db.Exec(`INSERT INTO sets (org_id, app_id, id, metadata, content ) VALUES ($1, $2, $3, $4, $5) ON CONFLICT DO NOTHING`, orgID, appID, sw.ID, (*persistableSetMetadata)(&sw.Metadata), (*persistableSet)(&sw.Content))
+	_, err := db.Exec(`INSERT INTO sets (id, set) VALUES ($1, $2) ON CONFLICT DO NOTHING`, sw.ID, (*persistableSet)(&sw.Set))
 	if err != nil {
-		log.Printf("Database error inserting set in org `%s` and app `%s` with Id `%s`. (%v)", orgID, appID, sw.ID, err)
+		log.Printf("Database error inserting set with Id `%s`. (%v)", sw.ID, err)
 		return fmt.Errorf("insert set: %w", err)
+	}
+
+	result, err := db.Exec(`INSERT INTO set_owners (org_id, app_id, set_id, metadata) VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING`, orgID, appID, sw.ID, (*persistableSetMetadata)(&sw.Metadata))
+	if err != nil {
+		log.Printf("Database error inserting set_owners with ID `%s` in app %s/%s. (%v)", sw.ID, orgID, appID, err)
+		return fmt.Errorf("insert set_owners: %w", err)
 	}
 	numRows, err := result.RowsAffected()
 	if err != nil {
-		log.Printf("Database error requesting rows-affected inserting set in org `%s` and app `%s` with Id `%s`. (%v)", orgID, appID, sw.ID, err)
-		return fmt.Errorf("rows affected, insert set: %w", err)
+		log.Printf("Database error requesting rows-affected inserting set_owners ID `%s` in app %s/%s. (%v)", sw.ID, orgID, appID, err)
+		return fmt.Errorf("rows affected, insert set_owners: %w", err)
 	}
 	if numRows == 0 {
-		log.Printf("Set with Id `%s` already exists in org `%s` and app `%s`.", sw.ID, orgID, appID)
+		log.Printf("Set with ID `%s` already exists in app %s/%s. (%v)", sw.ID, orgID, appID, err)
 		return ErrAlreadyExists
 	}
 	return nil
@@ -181,7 +196,7 @@ func (db model) insertSet(orgID string, appID string, sw SetWrapper) error {
 
 // selectAllDeltas fetches a list of all the deltas created in a particular app
 func (db model) selectAllDeltas(orgID string, appID string) ([]DeltaWrapper, error) {
-	rows, err := db.Query(`SELECT id, metadata, content FROM deltas WHERE org_id = $1 AND app_id = $2`, orgID, appID)
+	rows, err := db.Query(`SELECT id, metadata, delta FROM deltas WHERE org_id = $1 AND app_id = $2`, orgID, appID)
 	defer rows.Close()
 	if err != nil {
 		log.Printf("Database error fetching deltas in org `%s` and app `%s`. (%v)", orgID, appID, err)
@@ -191,7 +206,7 @@ func (db model) selectAllDeltas(orgID string, appID string) ([]DeltaWrapper, err
 	var deltas []DeltaWrapper
 	for rows.Next() {
 		var dw DeltaWrapper
-		rows.Scan(&dw.ID, (*persistableDeltaMetadata)(&dw.Metadata), (*persistableDelta)(&dw.Content))
+		rows.Scan(&dw.ID, (*persistableDeltaMetadata)(&dw.Metadata), (*persistableDelta)(&dw.Delta))
 		deltas = append(deltas, dw)
 	}
 	return deltas, nil
@@ -209,7 +224,7 @@ func (db model) insertDelta(orgID, appID string, locked bool, metadata DeltaMeta
 	for notUnique {
 		rand.Read(randomValue)
 		id = hex.EncodeToString(randomValue)
-		result, err := db.Exec(`INSERT INTO deltas (org_id, app_id, id, locked, metadata, content ) VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT DO NOTHING`, orgID, appID, id, locked, (*persistableDeltaMetadata)(&metadata), (*persistableDelta)(&content))
+		result, err := db.Exec(`INSERT INTO deltas (org_id, app_id, id, locked, metadata, delta ) VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT DO NOTHING`, orgID, appID, id, locked, (*persistableDeltaMetadata)(&metadata), (*persistableDelta)(&content))
 		if err != nil {
 			log.Printf("Database error inserting delta in org `%s` and app `%s` and ID `%s`. (%v)", orgID, appID, id, err)
 			return "", fmt.Errorf("insert delta: %w", err)
@@ -226,7 +241,7 @@ func (db model) insertDelta(orgID, appID string, locked bool, metadata DeltaMeta
 
 // updateDelta stores a delta for a particular app.
 func (db model) updateDelta(orgID, appID, deltaID string, locked bool, metadata DeltaMetadata, delta depset.Delta) error {
-	result, err := db.Exec(`UPDATE deltas SET metadata = $4, content = $5 WHERE org_id = $1 AND app_id = $2 AND id = $3`, orgID, appID, deltaID, (*persistableDeltaMetadata)(&metadata), (*persistableDelta)(&delta))
+	result, err := db.Exec(`UPDATE deltas SET metadata = $4, delta = $5 WHERE org_id = $1 AND app_id = $2 AND id = $3`, orgID, appID, deltaID, (*persistableDeltaMetadata)(&metadata), (*persistableDelta)(&delta))
 	if err != nil {
 		log.Printf("Database error updating delta `%s`. (%v)", deltaID, err)
 		return fmt.Errorf("update delta (%s): %w", deltaID, err)
@@ -245,9 +260,9 @@ func (db model) updateDelta(orgID, appID, deltaID string, locked bool, metadata 
 // selecteSet fetches a particular set from an app.
 // The ErrNotFound sential error is returned if the specific set could not be found.
 func (db model) selectDelta(orgID string, appID string, deltaID string) (DeltaWrapper, error) {
-	row := db.QueryRow(`SELECT id, metadata, content FROM deltas WHERE org_id = $1 AND app_id = $2 AND id = $3`, orgID, appID, deltaID)
+	row := db.QueryRow(`SELECT id, metadata, delta FROM deltas WHERE org_id = $1 AND app_id = $2 AND id = $3`, orgID, appID, deltaID)
 	var dw DeltaWrapper
-	err := row.Scan(&dw.ID, (*persistableDeltaMetadata)(&dw.Metadata), (*persistableDelta)(&dw.Content))
+	err := row.Scan(&dw.ID, (*persistableDeltaMetadata)(&dw.Metadata), (*persistableDelta)(&dw.Delta))
 	if err == sql.ErrNoRows {
 		return DeltaWrapper{}, ErrNotFound
 	} else if err != nil {
