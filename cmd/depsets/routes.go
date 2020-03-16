@@ -16,5 +16,7 @@ func (s *server) setupRoutes() {
 	r.Methods("PUT").Path("/orgs/{orgId}/apps/{appId}/deltas/{deltaId}").Handler(s.replaceDelta())
 	r.Methods("PATCH").Path("/orgs/{orgId}/apps/{appId}/deltas/{deltaId}").Handler(s.updateDelta())
 
+	r.Methods("GET").Path("/alive").Handler(s.isAlive())
+	r.Methods("GET").Path("/health").Handler(s.isReady())
 	s.router = r
 }

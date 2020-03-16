@@ -59,3 +59,15 @@ func writeAsJSON(w http.ResponseWriter, statusCode int, obj interface{}) {
 	w.WriteHeader(statusCode)
 	w.Write(jsonObj)
 }
+
+func (s *server) isAlive() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}
+}
+
+func (s *server) isReady() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}
+}
